@@ -11,6 +11,8 @@
 #include"string.h"
 #include <Windows.h>
 #include <tchar.h>
+#include "hdlcFSM.h"
+
 typedef unsigned int u_int;   //32位
 typedef unsigned char u_char;  //8位
 typedef unsigned short u_short;//16位
@@ -77,7 +79,6 @@ typedef struct hdlc{
 #define STARTFALG 0x7e
 
 	u_int infolen;
-	u_int framelen;
 	u_int dst_addrlen;
 	u_int src_addrlen;
 	u_int nr;
@@ -86,7 +87,8 @@ typedef struct hdlc{
 	u_char pollfin;
 #define POL 1
 #define FIN 0
-	
+#define FON 1
+
 #define CTLPOLL 0x10 //PF控制位
 #define CTLFIN 0x00
 
@@ -96,6 +98,7 @@ int readoneline(FILE* q, u_char oneLineData[MAX_LEN]);//void readoneline(FILE* q
 void writetxt(FILE* z, u_char write[MAX_LEN], u_char out_len);
 u_short h_cs_cal(u_char h_cs[MAX_LEN], u_char hcs_len);
 u_short f_cs_cal(u_char f_cs[MAX_LEN], u_char fcs_len);
+u_short cs_cal(u_char data[MAX_LEN], u_char data_len);
 
 enum{
 	SNRM1 = 0,
@@ -114,15 +117,23 @@ enum{
 	ERROR_TIMEOUT_HDLC,
 	ERROR_UNKONW_TYPE
 };
-int convFrameStr(hdlc frame, _TCHAR* S);
-int convFrameHex(hdlc frame, u_char* pData);
-int convStrFrame(_TCHAR* S, hdlc frame);
-int convHexFrame(u_char *pData, hdlc *hdlc_p);
+int convFrameStr(hdlc *frame, _TCHAR* S);
+int convFrameHex(hdlc *frame, u_char* pData);
+int convStrFrame(_TCHAR* S, hdlc *frame);
 int convHexFrame(u_char *pData, hdlc *hdlc_p);
 int convHexStr(u_char *pData, _TCHAR* S, int len);
 int convStrHex(_TCHAR* S, u_char* pData);
-int outHexStr(_TCHAR* S, u_char *pRawData, u_int index, u_int *bytesidx, u_char byte);
-void genFrameData(_TCHAR *S, u_char *pRawData, hdlc frame);
+int outHexStr(_TCHAR* S, u_char *pRawData, int index, int *bytesidx, u_char byte);
+void genFrameData(_TCHAR *S, u_char *pRawData, hdlc *frame);
 
 u_int GetTypes(hdlc &frame);
+
+int makeRR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf);
+int makeRNR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf);
+int makeUI(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int pf);
+int makeSNRM(HdlcTcb *tcb, hdlc *frame, hdlc *outframe);
+int makeDISC(HdlcTcb *tcb, hdlc *frame, hdlc *outframe);
+int makeDM(HdlcTcb *tcb, hdlc *frame, hdlc *outframe);
+int makeFRMR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen);
+int makeUA(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int len);
 #endif

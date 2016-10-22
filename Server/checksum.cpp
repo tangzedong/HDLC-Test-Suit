@@ -61,3 +61,22 @@ u_short f_cs_cal(u_char data[MAX_LEN], u_char data_len)
 {
 	return h_cs_cal(data, data_len + 2);
 }
+
+u_short cs_cal(u_char data[MAX_LEN], u_char data_len)
+{
+		unsigned short cs = 0xffff;    // 初始化
+		unsigned int nLength = data_len;//不计算开始和结束标志
+		unsigned char*pData = data;
+		while (nLength>0)
+		{
+			cs = (cs >> 8) ^ fcstab[(cs ^ *pData) & 0xff];
+			nLength--;
+			pData++;
+		}
+		cs = ~cs;    // 取反
+		unsigned short cs_ch = cs;
+		cs_ch = (cs_ch >> 8);//取第一个字节
+		cs = cs << 8;//取第二个字节
+		cs = cs_ch | cs;
+		return cs;
+}

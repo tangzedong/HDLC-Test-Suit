@@ -27,11 +27,10 @@ int convHexFrame(u_char *pData, hdlc *hdlc_p)
 	u_char *pfront = pData;
 	u_char _byte, _word, _longword;
 	hdlc_p->start_flag = *pfront;//将标志位存入
-	if (hdlc_p->start_flag != 0x7E)
+	if (hdlc_p->start_flag != STARTFLAG)
 	{
 		//m_liststateinfo.AddString(_T("开始标志位错误！"));
 		return ERROR_STARTFLAG;
-		return;
 	}
 	pfront++;
 	//hdlc_p->f_format.frame_type = (str[1]&160)/16;
@@ -97,7 +96,7 @@ int convHexFrame(u_char *pData, hdlc *hdlc_p)
 		return ERROR_SRC_ADDR_LEN;
 	}
 
-	hdlc_p->frame_ctl = *(pfront + 1);//取出控制域的数据
+	hdlc_p->frame_ctl = *pfront;//取出控制域的数据
 	if (hdlc_p->frame_ctl & 0) //I帧 取出nr和ns域
 	{
 		hdlc_p->nr = hdlc_p->frame_ctl >> 5;
@@ -159,23 +158,24 @@ int convStrHex(_TCHAR* S, u_char* pData)
 	int tmp;
 	int  nReceivedLen = buff.GetLength();
 	int f_val = 0;
-	for (u_int i = 0; i < (nReceivedLen/2); f_val++)
+	for (u_int i = 0; i < (nReceivedLen/2); i++)
 	{
 		//高四位
-		curchar = buff.GetAt(f_val++);
+		curchar = buff.GetAt(f_val);
 		if (isdigit(curchar))
 			tmp = curchar - 48;					//读取的字符为数字
 		else if (isalpha(curchar))
 			tmp = curchar - 55;					//读取的字符为（大写）字母
-		pData[f_val] = (tmp << 4);
-
-		curchar = buff.GetAt(f_val++);
+		pData[i] = (tmp << 4);
+		f_val++;
+		curchar = buff.GetAt(f_val);
 		//低四位
 		if (isdigit(curchar))
 			tmp = (curchar)-48;					//读取的字符为数字
 		else if (isalpha(curchar))
 			tmp = (curchar)-55;					//读取的字符为（大写）字母
-		pData[f_val] |= (u_char)tmp;
+		pData[i] |= (u_char)tmp;
+		f_val++;
 	}
 	return 0;
 }
@@ -200,7 +200,7 @@ void genFrameData(_TCHAR *S, u_char *pRawData, hdlc *frame){
 	u_short typebytes = 0;
 	index = outHexStr(S, pRawData, index, &bytesidx, frame->start_flag);
 
-	typebytes = ((u_int)frame->f_format.frame_type << 8) | (frame->framelen & 0x3F);
+	typebytes = ((u_int)frame->f_format.frame_type << 8) | (frame->f_format.frame_sublen & 0x3F);
 	typebytes = (typebytes & 0xBFFF) | ((u_int)frame->f_format.frame_seg << 13);
 	index = outHexStr(S, pRawData, index, &bytesidx, (u_char)(typebytes >> 8));
 	index = outHexStr(S, pRawData, index, &bytesidx, (u_char)(typebytes & 0xFF));
@@ -217,7 +217,7 @@ void genFrameData(_TCHAR *S, u_char *pRawData, hdlc *frame){
 
 	for (i = frame->src_addrlen - 1; i >= 0; i--)
 	{
-		addrbyte = (frame->dst_addr >> (i * 7)) & 0x7F;
+		addrbyte = (frame->src_addr >> (i * 7)) & 0x7F;
 		addrbyte = addrbyte << 1;
 		if (i == 0) addrbyte |= 1;
 		index = outHexStr(S, pRawData, index, &bytesidx, addrbyte);
@@ -226,13 +226,14 @@ void genFrameData(_TCHAR *S, u_char *pRawData, hdlc *frame){
 	ctlbyte = frame->frame_ctl | (frame->nr << 5) | (frame->ns << 1) | (frame->pollfin << 4);
 	index = outHexStr(S, pRawData, index, &bytesidx, ctlbyte);
 
-	pRawData&&(frame->h_cs = h_cs_cal(pRawData, frame->f_format.frame_sublen));
-	index = outHexStr(S, pRawData, index, &bytesidx, frame->h_cs & 0xFF);
+	pRawData&&(frame->h_cs = cs_cal(pRawData + 1, frame->dst_addrlen + frame->src_addrlen + 3));
 	index = outHexStr(S, pRawData, index, &bytesidx, frame->h_cs >> 8);
+	index = outHexStr(S, pRawData, index, &bytesidx, frame->h_cs & 0xFF);
 
 	if (frame->infolen == 0)//info field empty.
 	{
 		index = outHexStr(S, pRawData, index, &bytesidx, 0x7E);
+		S ? S[index] = '\0' : 0;
 		return;
 	}
 
@@ -241,48 +242,50 @@ void genFrameData(_TCHAR *S, u_char *pRawData, hdlc *frame){
 	{
 		index = outHexStr(S, pRawData, index, &bytesidx, frame->info_buff[i]);
 	}
-	pRawData&&(frame->f_cs = f_cs_cal(pRawData, frame->infolen + frame->f_format.frame_sublen));
-	index = outHexStr(S, pRawData, index, &bytesidx, frame->f_cs & 0xFF);
+	pRawData && (frame->f_cs = cs_cal(pRawData + 1, frame->infolen + frame->dst_addrlen + frame->src_addrlen + 5));
 	index = outHexStr(S, pRawData, index, &bytesidx, (frame->f_cs >> 8));
+	index = outHexStr(S, pRawData, index, &bytesidx, frame->f_cs & 0xFF);
+	
 	index = outHexStr(S, pRawData, index, &bytesidx, frame->end_flag);
+	S?S[index] = '\0':0;
 	return;
 }
 
 u_int GetTypes(hdlc &frame)
 {
-	if (frame.frame_ctl & MASKI == 0)
+	if ((frame.frame_ctl & MASKI) == 0)
 	{
 		return TYPEI;
 	}
-	else if (frame.frame_ctl & MASKRR == TYPERR)
+	else if ((frame.frame_ctl & MASKRR) == TYPERR)
 	{
 		return TYPERR;
 	}
-	else if (frame.frame_ctl & MASKRNR == TYPERNR)
+	else if ((frame.frame_ctl & MASKRNR) == TYPERNR)
 	{
 		return TYPERNR;
 	}
-	else if (frame.frame_ctl & MASKSNRM == TYPESNRM)
+	else if ((frame.frame_ctl & MASKSNRM) == TYPESNRM)
 	{
 		return TYPESNRM;
 	}
-	else if (frame.frame_ctl & MASKDISC == TYPEDISC)
+	else if ((frame.frame_ctl & MASKDISC) == TYPEDISC)
 	{
 		return TYPEDISC;
 	}
-	else if (frame.frame_ctl & MASKUA == TYPEUA)
+	else if ((frame.frame_ctl & MASKUA) == TYPEUA)
 	{
 		return TYPEUA;
 	}
-	else if (frame.frame_ctl & MASKDM == TYPEDM)
+	else if ((frame.frame_ctl & MASKDM) == TYPEDM)
 	{
 		return TYPEDM;
 	}
-	else if (frame.frame_ctl & MASKFRMR == TYPEFRMR)
+	else if ((frame.frame_ctl & MASKFRMR) == TYPEFRMR)
 	{
 		return TYPEFRMR;
 	}
-	else if (frame.frame_ctl & MASKUI == TYPEUI)
+	else if ((frame.frame_ctl & MASKUI) == TYPEUI)
 	{
 		return TYPEUI;
 	}

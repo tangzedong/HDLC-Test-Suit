@@ -18,27 +18,27 @@
 //hdlcpointer hdlc_p =  NULL;
 hdlcpointer hdlc_p;
 u_char save_inf[MAX_LEN];
-u_char rcv_num = 0;      //我自己记录的接收序号
-u_char send_num = 0;   //我自己记录的发送序号
+//tcb->rcv_num我自己记录的接收序号
+//tcb->send_num我自己记录的发送序号
 u_char nr = 0;                //接收到的接收序号
 u_char ns = 0;                //接收到的发送序号
-u_char frame_ind;          //值为1进入状态循环
-u_char frmr_flag;           //值为1发送FRMR帧
-u_char frame_p_f;           //记录P/F位
-u_char state_val = STATE_NDM;    //初始时置1状态为NDM，2为WAIT_CONNECT , 3为NRM , 4为WAIT_DISCONNECT
+//初始时置1状态为NDM，2为WAIT_CONNECT , 3为NRM , 4为WAIT_DISCONNECT
 u_char str[MAX_LEN];
 u_char* str_pointer;
-u_int d_addr_length;
-u_char i_length;
 FILE *wc;
 u_int tmp;
 u_char* str_p;
-static u_int m = 0; //记录信息分帧存储的变量,静态变量，不会第二次被赋初始值
+static u_int m = 0; //记录信息分帧存储的变量
 u_short h_cs_val;  //计算出来的HCS序列
 u_short f_cs_val;   //计算出来的FCS序列
 u_char write_str[MAX_LEN];
 int nSentLen;
-HdlcTcb tcb;
+HdlcTcb _tcb;
+HdlcTcb *tcb = &_tcb;
+DWORD curtime;
+u_char settingdata[23] = { 0x81, 0x80, 0x14, 0x05, 0x02, 0x00, 0x80, 0x06, 0x02, 0x00,
+		0x80, 0x07, 0x04, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0x01 };
+int UAdatalen = 23;
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
 
 class CAboutDlg : public CDialogEx
@@ -163,6 +163,16 @@ BOOL CServerDlg::OnInitDialog()
 	SendDlgItemMessage(IDC_LIST_SENT, LB_SETHORIZONTALEXTENT, (WPARAM)1000, 0);
 	SendDlgItemMessage(IDC_LIST_RECEIVED, LB_SETHORIZONTALEXTENT, (WPARAM)1000, 0);
 	SendDlgItemMessage(IDC_LIST_STATEINFO, LB_SETHORIZONTALEXTENT, (WPARAM)1000, 0);
+
+	tcb->curstate = STATE_NDM;//初始化状态机
+	tcb->nr = 0;
+	tcb->ns = 0;
+	tcb->started = 0;
+	tcb->frame_p_f = 0;
+	tcb->rcv_num = 0;
+	tcb->send_num = 0;
+	tcb->frmr_flag = 0;
+
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -300,7 +310,7 @@ void CServerDlg::onAccept(void)  //如果OnAccept函数执行成功会转来执行onAccept()
 void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive()
 {
 
-	_TCHAR buff[2048];
+	u_char buff[2048];
 	int nBufferSize = 2048;
 	int nReceivedLen;
 	CString strReceived;
@@ -327,10 +337,9 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	u_int res = convHexFrame(str, hdlc_p);
 
 	//-----------------------------------------------------------错误处理--------------------------------------------------------------------------
-	if (res = ERROR_INF_OVERFLOW)//信息域超长
+	if (res == ERROR_INF_OVERFLOW)//信息域超长
 	{
-		writetxt((FILE*)wc, write_str, 100);
-		//通过send()函数发送响应
+		u_char data[255] = {0x10, 0x00, 0x20};
 		m_strToServer = " 7E A0 0D 21 02 23 97 04 C4 10 00 20 E0 6B 7E";
 		nSentLen = m_sClientSocket.Send(m_strToServer, 100);
 		if (nSentLen != SOCKET_ERROR)
@@ -340,7 +349,7 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 			UpdateData(FALSE);
 		}
 		//  m_liststateinfo.AddString(_T("信息域超长，超出协商的最大信息长度！"));
-		AfxMessageBox(LPCTSTR("信息域超长，超出协商的最大信息长度！！！"), MB_OK | MB_ICONSTOP);
+		AfxMessageBox(_T("信息域超长，超出协商的最大信息长度！！！"), MB_OK | MB_ICONSTOP);
 		return;
 	}
 
@@ -359,64 +368,63 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 
 
 	//判断控制域
-	if ((hdlc_p->frame_ctl & 255) == 147)
+	switch (GetTypes(*hdlc_p))
 	{
+	case TYPESNRM:
 		m_liststateinfo.AddString(_T("帧类型为SNRM！"));
-		frame_p_f = ((hdlc_p->frame_ctl & 16) >> 4);
-	}
-	else if (((hdlc_p->frame_ctl & 255) == 83))
-	{
+		break;
+	case TYPEDISC:
 		m_liststateinfo.AddString(_T("帧类型为DISC！"));
-		frame_p_f = ((hdlc_p->frame_ctl & 16) >> 4);
-	}
-	else if (((hdlc_p->frame_ctl & 1) == 0))
-	{
+		break;
+	case TYPEI:
 		m_liststateinfo.AddString(_T("帧类型为I！"));
-		frame_p_f = ((hdlc_p->frame_ctl & 16) >> 4);
-		nr = (hdlc_p->frame_ctl & 224) >> 5;//将序号的值记录，对吗？？？
-		ns = (hdlc_p->frame_ctl & 14) >> 1;
-	}
-	else if ((hdlc_p->frame_ctl & 31) == 17)
-	{
+		break;
+	case TYPERR:
 		m_liststateinfo.AddString(_T("帧类型为RR！"));
-		frame_p_f = ((hdlc_p->frame_ctl & 16) >> 4);
-		nr = (hdlc_p->frame_ctl & 224) >> 5;
-	}
-	else if ((hdlc_p->frame_ctl & 31) == 21)
-	{
+		break;
+	case TYPERNR:
 		m_liststateinfo.AddString(_T("帧类型为RNR！"));
-		frame_p_f = ((hdlc_p->frame_ctl & 16) >> 4);
-		nr = (hdlc_p->frame_ctl & 224) >> 5;
-	}
-	else
-	{
-		AfxMessageBox(LPCTSTR("控制域类型错误或源地址长度超过1字节！"), MB_OK | MB_ICONSTOP);
-		frmr_flag = 1;
-		return;
+		break;
+	default:
+		AfxMessageBox(_T("控制域类型错误或源地址长度超过1字节！"), MB_OK | MB_ICONSTOP);
+		tcb->frmr_flag = 1;
+		//return;
 	}
 
-
+	
 	//进行HCS校验-----------------------计算h_cs_cal
-	tcb.curstate = 1;
-	h_cs_val = h_cs_cal(str, d_addr_length);
+	h_cs_val = h_cs_cal(str, hdlc_p->dst_addrlen);
 	if (hdlc_p->h_cs != h_cs_val)
 	{
-		AfxMessageBox(LPCTSTR("HCS校验出错！！！"), MB_OK | MB_ICONSTOP);
+		AfxMessageBox(_T("HCS校验出错！！！"), MB_OK | MB_ICONSTOP);
 		return;
 	}
 
 	//帧结束标志检测
 	if (hdlc_p->end_flag != 0x7E)
 	{
-		AfxMessageBox(LPCTSTR("帧接收超时,没有结尾标志！！！"), MB_OK | MB_ICONSTOP);//等待超时结束，没有检测到帧结束标志
+		AfxMessageBox(_T("帧接收超时,没有结尾标志！！！"), MB_OK | MB_ICONSTOP);//等待超时结束，没有检测到帧结束标志
 		return;
 	}
 
 	m_liststateinfo.AddString(_T("一帧接收结束！"));
-	frame_ind = 1;//标志可以进入状态循环
-	tcb.start = 1;
+	if (tcb->started == 0)
+	{
+		tcb->started = 1;//frame_ind = 1;//标志可以进入状态循环
+		tcb->curstate = STATE_NDM;
+	}
+	nr = hdlc_p->nr;
+	ns = hdlc_p->ns;
+	hdlc outframe;//输出帧
+	int send_flag = 0;//是否发送响应帧
+	int len;
+	u_int i_length = hdlc_p->infolen;
+	tcb->frame_p_f = hdlc_p->pollfin;
 	if (i_length == 0)
 	{
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////no information field建立连接/////////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		//if(send_num !=  nr)//????
 		//frmr_flag = 1;  
 		//-----------取消帧间超时函数------readoneline进行下一行的读入，跳回开始，有没有连续的帧
@@ -429,141 +437,111 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 		printf("failed to open file\n");
 		return -1;
 		}*/
-		if (GetTypes(*hdlc_p) == TYPESNRM && frame_ind == 1 && frame_p_f == 1)    //帧类型为SNRM！
+		if (GetTypes(*hdlc_p) == TYPESNRM && tcb->started == 1 && tcb->frame_p_f == 1)    //帧类型为SNRM！
 		{
-			if (state_val == STATE_NDM)
+			if (tcb->curstate == STATE_NDM)
 			{
-				state_val = STATE_WAIT_CONNECT;
-				tcb.curstate = STATE_WAIT_CONNECT;
+				tcb->curstate = STATE_WAIT_CONNECT;
+				tcb->curstate = STATE_WAIT_CONNECT;
 			}
-			switch (state_val)
+			switch (tcb->curstate)
 			{
 			case STATE_NDM: //不会出现这种情况
 			case STATE_WAIT_CONNECT://默认上层返回result是等于OK									
-				rcv_num = 0;
-				send_num = 0;
-
-				hdlc outframe;//make UA 帧做出响应  
+				tcb->rcv_num = 0;
+				tcb->send_num = 0;
+				//make UA 帧做出响应  
 				//doUAResponse();
-				DOHANDLER(WAITCON, SNRM)(&tcb, hdlc_p, &outframe);
-				writetxt((FILE*)wc, write_str, 37);
-				//通过send()函数发送响应
-				m_strToServer = " 7E A0 23 21 00 02 00 23 73 F6 C5 81 80 14 05 02 00 80 06 02 00 80 07 04 00 00 00 01 08 04 00 00 00 01 CE 6A 7E";
-				nSentLen = m_sClientSocket.Send(m_strToServer, 150);
-				if (nSentLen != SOCKET_ERROR)
-				{
-					//发送成功
-					m_listSent.AddString(m_strToServer);
-					UpdateData(FALSE);
-				}
-				//调用写入txt文件的函数  
-				state_val = STATE_NRM;              //转移到NRM状态
+				//make UA response;
+				//DOHANDLER(WAITCON, SNRM)(&tcb, hdlc_p, &outframe);
+				makeUA(tcb, hdlc_p, &outframe, settingdata, UAdatalen); 
+				tcb->curstate = STATE_NRM;              //转移到NRM状态
 				m_liststateinfo.AddString(_T("已经处于NRM状态！"));
+				send_flag = 1;
 				break;
 			case STATE_NRM:
 				//doNRM_SNRM();
-				hdlc outframe;
-				DOHANDLER(NRM, SNRM)(&tcb, hdlc_p, &outframe);
-				writetxt((FILE*)wc, write_str, 37);
-				//通过send()函数发送响应
-				m_strToServer = " 7E A0 23 21 00 02 00 23 73 F6 C5 81 80 14 05 02 00 80 06 02 00 80 07 04 00 00 00 01 08 04 00 00 00 01 CE 6A 7E";
-				nSentLen = m_sClientSocket.Send(m_strToServer, 150);
-				if (nSentLen != SOCKET_ERROR)
-				{
-					//发送成功
-					m_listSent.AddString(m_strToServer);
-					UpdateData(FALSE);
-				}
+				//make UA
+				//DOHANDLER(NRM, SNRM)(&tcb, hdlc_p, &outframe);
+				makeUA(tcb, hdlc_p, &outframe, settingdata, UAdatalen);
 				m_liststateinfo.AddString(_T("已经处于连接状态！"));
+				send_flag = 1;
 				break;
 			case STATE_WAIT_DISCONNECT:m_liststateinfo.AddString(_T("不响应！")); break;
 			default:m_liststateinfo.AddString(_T("不存在该状态！"));
 			}
 		}
-		else if (GetTypes(*hdlc_p) == TYPEDISC && frame_ind == 1 && frame_p_f == 1)     //帧类型为DISC！
+		else if (GetTypes(*hdlc_p) == TYPEDISC && tcb->started == 1 && tcb->frame_p_f == 1)     //帧类型为DISC！
 		{
-			if (state_val == STATE_NRM)
+			if (tcb->curstate == STATE_NRM)
 			{
-				state_val = STATE_WAIT_DISCONNECT;
+				tcb->curstate = STATE_WAIT_DISCONNECT;
 			}
-			switch (state_val)
+			switch (tcb->curstate)
 			{
 			case STATE_NDM:
 				//doNDM_DISC();
-				write_str[0] = 0x7E;
-				write_str[1] = 0xA0;
-				write_str[2] = 0x08;
-				write_str[3] = 0x21;
-				write_str[4] = 0x02;
-				write_str[5] = 0x23;
-				write_str[6] = 0x1F;
-				write_str[7] = 0x10;
-				write_str[8] = 0xEA;
-				write_str[9] = 0x7E;
+				//make DM frame
+				makeDM(tcb, hdlc_p, &outframe);
 				m_liststateinfo.AddString(_T("已经处于NDM状态！"));
-				writetxt((FILE*)wc, write_str, 10);
-				//通过send()函数发送响应
-				m_strToServer = " 7E A0 08 21 02 23 1F 10 EA 7E";
-				nSentLen = m_sClientSocket.Send(m_strToServer, 100);
-				if (nSentLen != SOCKET_ERROR)
-				{
-					//发送成功
-					m_listSent.AddString(m_strToServer);
-					UpdateData(FALSE);
-				}
+				send_flag = 1;
 				break;                                                              //回DM,不转移
 			case STATE_WAIT_CONNECT:
 				m_liststateinfo.AddString(_T("不响应！"));
 				break;
 			case STATE_NRM://不会出现这种情况
-			case STATE_WAIT_DISCONNECT://上层默认result 为OK make UA
-				hdlc outframe;
-				DOHANDLER(WAITDIS, DISC)(&tcb, hdlc_p, &outframe);
-				writetxt((FILE*)wc, write_str, 37);
+			case STATE_WAIT_DISCONNECT://上层默认result 为OK 
+				//make UA
+				//DOHANDLER(WAITDIS, DISC)(&tcb, hdlc_p, &outframe);
 				//通过send()函数发送响应
-				m_strToServer = " 7E A0 23 21 00 02 00 23 73 F6 C5 81 80 14 05 02 00 80 06 02 00 80 07 04 00 00 00 01 08 04 00 00 00 01 CE 6A 7E";
-				nSentLen = m_sClientSocket.Send(m_strToServer, 150);
-				if (nSentLen != SOCKET_ERROR)
-				{
-					//发送成功
-					m_listSent.AddString(m_strToServer);
-					UpdateData(FALSE);
-				}
-				state_val = STATE_NDM;
+				makeUA(tcb, hdlc_p, &outframe, settingdata, UAdatalen);
+				send_flag = 1;
+				tcb->curstate = STATE_NDM;
 				break;                                                          //回UA，状态转移到NDM
 			default:
 				m_liststateinfo.AddString(_T("不存在该状态！"));
 			}
 		}
-		else if (GetTypes(*hdlc_p) == TYPERR && frame_ind == 1 && frame_p_f == 1)//帧类型为RR！
+		else if (GetTypes(*hdlc_p) == TYPERR && tcb->started == 1 && tcb->frame_p_f == 1)//帧类型为RR！
 		{
-			switch (state_val)
+			switch (tcb->curstate)
 			{
 			case STATE_NDM:m_liststateinfo.AddString(_T("不响应！")); break;
 			case STATE_WAIT_CONNECT:m_liststateinfo.AddString(_T("不响应！")); break;
 			case STATE_NRM:
-				hdlc outframe;
-				tcb.sendnum = send_num;
-				DOHANDLER(NRM, RR)(&tcb, hdlc_p, &outframe);
-				writetxt((FILE*)wc, write_str, 15);
+				//DOHANDLER(NRM, RR)(&tcb, hdlc_p, &outframe);
 				//通过send()函数发送响应
-				m_liststateinfo.AddString(_T("处于NRM状态！"));
-				m_strToServer.Format(_T("7E A0 0D 21 02 23 97 04 C4 10 00 20 E0 6B 7E"));
-				nSentLen = m_sClientSocket.Send(m_strToServer, 100);
-				if (nSentLen != SOCKET_ERROR)
+				if (nr == tcb->send_num && tcb->frame_p_f == 1)
 				{
-					//发送成功
-					m_listSent.AddString(m_strToServer);
-					UpdateData(FALSE);
+					//make RR
+					if (nr == 0)
+					{
+						makeRR(tcb, hdlc_p, &outframe, 0, tcb->frame_p_f);
+					}
+					else
+					{
+						tcb->send_num++;
+						makeRR(tcb, hdlc_p, &outframe, tcb->rcv_num, tcb->frame_p_f);
+					}
 				}
+				else
+				{
+					//make FRMR
+					u_char errorinf[3];
+					errorinf[0] = 0x10; errorinf[1] = 0x00; errorinf[2] = 0x20;
+					len = 3;
+					makeFRMR(tcb, hdlc_p, &outframe, errorinf, len);
+				}
+				send_flag = 1;
+				m_liststateinfo.AddString(_T("处于NRM状态！"));
 				break;
 			case STATE_WAIT_DISCONNECT:	m_liststateinfo.AddString(_T("不响应！")); break;
 			default:m_liststateinfo.AddString(_T("不存在该状态！"));
 			}
 		}
-		else if (GetTypes(*hdlc_p) == TYPERNR && frame_ind == 1 && frame_p_f == 1) //帧类型为RNR！
+		else if (GetTypes(*hdlc_p) == TYPERNR && tcb->started == 1 && tcb->frame_p_f == 1) //帧类型为RNR！
 		{
-			switch (state_val)
+			switch (tcb->curstate)
 			{
 			case STATE_NDM:m_liststateinfo.AddString(_T("不响应！")); break;
 			case STATE_WAIT_CONNECT:m_liststateinfo.AddString(_T("不响应！")); break;
@@ -579,10 +557,13 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 			m_liststateinfo.AddString(_T("不处理该类型的帧！"));
 		}
 	}
-	else if (i_length > 0)
+	else if (i_length > 0) //带信息域的处理
 	{
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////with information field数据传输///////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		//因为信息已经接收保存了，所以可以直接进行FCS校验
-		f_cs_val = f_cs_cal(str, (d_addr_length + i_length));
+		f_cs_val = f_cs_cal(str, (hdlc_p->dst_addrlen + i_length));
 		if (hdlc_p->f_cs != f_cs_val)
 		{
 			AfxMessageBox(_T("FCS校验失败！"), MB_OK | MB_ICONSTOP);
@@ -590,77 +571,60 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 		}
 		//-----------取消帧间超时函数------readoneline进行下一行的读入，跳回开始，有没有连续的帧
 
-
+		if (curtime - GetTickCount() > 250)
+		{
+			curtime = GetTickCount();
+		}
 		//-----------取消帧间超时函数------readoneline进行下一行的读入，跳回开始，有没有连续的帧
 		//==========判断状态=============做出回应===========进行转移========有信息域===
-		if (GetTypes(*hdlc_p) == TYPESNRM && frame_ind == 1 && frame_p_f == 1)    //帧类型为SNRM！
+		if (GetTypes(*hdlc_p) == TYPESNRM && tcb->started == 1 && tcb->frame_p_f == 1)    //帧类型为SNRM！
 		{
-			if (state_val == STATE_NDM)
-				state_val = STATE_WAIT_CONNECT;
+			if (tcb->curstate == STATE_NDM)
+				tcb->curstate = STATE_WAIT_CONNECT;
 
 			int sendlen;
 			CStringA tempstr;
-			switch (state_val)
+			switch (tcb->curstate)
 			{
 			case STATE_NDM: //处于NDM状态,不可能
 			case STATE_WAIT_CONNECT:  //默认上层反馈回来时result = OK
-				rcv_num = 0;
-				send_num = 0;
+				tcb->rcv_num = 0;
+				tcb->send_num = 0;
 				//make UA 帧做出响应   带有参数协商  
-				DOHANDLER(STATE_WAIT_CONNECT, SNRM)(&tcb, hdlc_p, write_str);
-				nSentLen = m_sClientSocket.Send(tempstr, 150);
-				if (nSentLen != SOCKET_ERROR)
-				{
-					//发送成功
-					m_listSent.AddString(m_strToServer);
-					UpdateData(FALSE);
-				}
-				state_val = STATE_NRM;                              //转移到NRM状态
+				//DOHANDLER(STATE_WAIT_CONNECT, SNRM)(&tcb, hdlc_p, write_str);
+				makeUA(tcb, hdlc_p, &outframe, settingdata, UAdatalen);
+				send_flag = 1;
+				tcb->curstate = STATE_NRM;                              //转移到NRM状态
 				break;
 			case STATE_NRM:m_liststateinfo.AddString(_T("已经建立连接！")); break;
 			case STATE_WAIT_DISCONNECT:m_liststateinfo.AddString(_T("不响应！")); break;
 			default:m_liststateinfo.AddString(_T("不存在该状态！"));
 			}
 		}
-		else if (GetTypes(*hdlc_p) == TYPEDISC && frame_ind == 1 && frame_p_f == 1)     //帧类型为DISC！
+		else if (GetTypes(*hdlc_p) == TYPEDISC && tcb->started == 1 && tcb->frame_p_f == 1)     //帧类型为DISC！
 		{
 			//当联合控制字段不允许信息字段时，接收到包含信息字段的帧，make FRMR
-			hdlc outframe;
-			makeFRMR(&tcb, hdlc_p, &outframe);
-			writetxt((FILE*)wc, write_str, 10);
-			//通过send()函数发送响应
-			m_strToServer.Format(_T("7E A0 08 21 02 23 97 50 E2 7E"));
-			CStringA tempstr;
-			tempstr = m_strToServer;
-			nSentLen = m_sClientSocket.Send(tempstr, 100);
-			if (nSentLen != SOCKET_ERROR)
-			{
-				//发送成功
-				m_listSent.AddString(m_strToServer);
-				UpdateData(FALSE);
-			}
+			u_char data[3] = {0x10, 0x00, 0x20};
+			makeFRMR(tcb, hdlc_p, &outframe, data, 3);
 		}
-		else if (GetTypes(*hdlc_p) == TYPEI && frame_ind == 1 && frame_p_f == 1)     //帧类型为I！
+		else if (GetTypes(*hdlc_p) == TYPEI && tcb->started == 1 && tcb->frame_p_f == 1)     //帧类型为I！
 		{
-			switch (state_val)
+			switch (tcb->curstate)
 			{
 			case STATE_NDM:m_liststateinfo.AddString(_T("处于NDM状态，不接收此类型帧！")); break;
 			case STATE_WAIT_CONNECT:break;
 			case STATE_NRM:
-				if (nr != send_num || ns != rcv_num) //序号错误处理
+				if (nr != tcb->send_num || ns != tcb->rcv_num) //序号错误处理
 				{
 					m_liststateinfo.AddString(_T("序号错误，拒绝接收该帧！"));
 					//make FRMR   输出
-					hdlc outframe;
-					makeFRMR(&tcb, hdlc_p, &outframe);
-					//写入记事本
-					writetxt((FILE*)wc, write_str, 10);
-					//通过send()函数发送响应
-					m_strToServer.Format(_T("7E A0 08 21 02 23 97 50 E2 7E"));
+					u_char errorcode[3] = { 0x10, 0x00, 0x20 };
+					makeFRMR(tcb, hdlc_p, &outframe, errorcode, 3);
+					send_flag = 1;
 					break;
 				}
 
-				if (hdlc_p->f_format.frame_seg == 0 && frame_p_f == 1 && m != 0)//分段的最后一帧，由m控制
+				if (hdlc_p->f_format.frame_seg == 0 && tcb->frame_p_f == 1 && m != 0)//分段的最后一帧，由m控制
 				{
 					//for(u_int n = 0;n < (m + 1);n++)//上报，获得需要返回的信息域
 					// {
@@ -686,12 +650,13 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 					m_strToServer.Format(_T("7E A0 2E 21 02 23 %02x E0 AE E6 E7 00 61 1F \
 																A1 09 06 07 60 85 74 05 08 01 01 A2 03 02 01 01 A3 05 A1 03 02 01 0D \
 																					BE 06 04 04 0E 01 06 01 6C 71 7E"), write_str[6]);
+					send_flag = 1;
 				}
-				else if (hdlc_p->f_format.frame_seg == 0 && frame_p_f == 1 && m == 0)//保证是完整的一帧  FRAME_type 为I_COMPLETE，整个帧
+				else if (hdlc_p->f_format.frame_seg == 0 && tcb->frame_p_f == 1 && m == 0)//保证是完整的一帧  FRAME_type 为I_COMPLETE，整个帧
 				{
 					write_str[0] = 0x7E; write_str[1] = 0xA0; write_str[2] = 0x08; write_str[3] = 0x21;
 					write_str[4] = 0x02; write_str[5] = 0x23;
-					switch (rcv_num)
+					switch (tcb->rcv_num)
 					{
 					case 0:write_str[6] = 0x11;	write_str[7] = 0x6E; write_str[8] = 0x03; break;
 					case 1:write_str[6] = 0x31; write_str[7] = 0x6C; write_str[8] = 0x22; break;
@@ -707,32 +672,33 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 					writetxt((FILE*)wc, write_str, 10);
 					//通过send()函数发送响应
 					m_strToServer.Format(_T("7E A0 08 21 02 23 %02x %02x %02x 7E"), write_str[6], write_str[7], write_str[8]);
+					send_flag = 1;
 				}
-				else if (hdlc_p->f_format.frame_seg == 1 && frame_p_f == 0)//每一波分帧的一部分
-				{
-					for (u_int n = 0; n < i_length; n++)
-					{
-						save_inf[m] = hdlc_p->info_buff[n];
-					}
-					m++;
-					rcv_num++;
-					if (rcv_num % 8 == 0)
-						rcv_num = 0;
-				}
-				else if (hdlc_p->f_format.frame_seg == 1 && frame_p_f == 1)//每一波分帧的最后一部分
+				else if (hdlc_p->f_format.frame_seg == 1 && tcb->frame_p_f == 0)//每一波分帧的一部分
 				{
 					for (u_int n = 0; n < i_length; n++)
 					{
 						save_inf[m] = hdlc_p->info_buff[n];
 						m++;
 					}
-					rcv_num++;
-					if (rcv_num % 8 == 0)
-						rcv_num = 0;
+					tcb->rcv_num++;
+					if (tcb->rcv_num % 8 == 0)
+						tcb->rcv_num = 0;
+				}
+				else if (hdlc_p->f_format.frame_seg == 1 && tcb->frame_p_f == 1)//每一波分帧的最后一部分
+				{
+					for (u_int n = 0; n < i_length; n++)
+					{
+						save_inf[m] = hdlc_p->info_buff[n];
+						m++;
+					}
+					tcb->rcv_num++;
+					if (tcb->rcv_num % 8 == 0)
+						tcb->rcv_num = 0;
 					//make RR   将要接收的序号也要改
 					write_str[0] = 0x7E; write_str[1] = 0xA0; write_str[2] = 0x08; write_str[3] = 0x21;
 					write_str[4] = 0x02; write_str[5] = 0x23;
-					switch (rcv_num)
+					switch (tcb->rcv_num)
 					{
 					case 0:write_str[6] = 0x11;	write_str[7] = 0x6E; write_str[8] = 0x03; break;
 					case 1:write_str[6] = 0x31; write_str[7] = 0x6C; write_str[8] = 0x22; break;
@@ -746,59 +712,48 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 					write_str[9] = 0x7E;
 					//发送响应
 					m_strToServer.Format(_T("7E A0 08 21 02 23 %02x %02x %02x 7E"), write_str[6], write_str[7], write_str[8]);
+					send_flag = 1;
 				}
 				//写入txt文件
-				writetxt((FILE*)wc, write_str, 10);
-				nSentLen = m_sClientSocket.Send(m_strToServer, 100);
-				if (nSentLen != SOCKET_ERROR)
-				{
-					//发送成功
-					m_listSent.AddString(m_strToServer);
-				}
 				UpdateData(FALSE);
 				break;
 			case STATE_WAIT_DISCONNECT:m_liststateinfo.AddString(_T("不接收此类型的帧！")); break;
 			default:m_liststateinfo.AddString(_T("没有此状态！"));
 			}
 		}
-		else if (GetTypes(*hdlc_p) == TYPERR && frame_ind == 1 && frame_p_f == 1)//帧类型为RR！
+		else if (GetTypes(*hdlc_p) == TYPERR && tcb->started == 1 && tcb->frame_p_f == 1)//帧类型为RR！
 		{
 			//当联合控制字段不允许信息字段时，接收到包含信息字段的帧，make FRMR
-			hdlc outframe;
-			makeFRMR(&tcb, hdlc_p, &outframe);
-			writetxt((FILE*)wc, write_str, 10);
-			//通过send()函数发送响应
-			m_strToServer = ("7E A0 08 21 02 23 97 50 E2 7E");
-			CStringA tempstr;
-			tempstr = m_strToServer;
-			nSentLen = m_sClientSocket.Send(tempstr, 100);
-			if (nSentLen != SOCKET_ERROR)
-			{
-				//发送成功
-				m_listSent.AddString(m_strToServer);
-				UpdateData(FALSE);
-			}
+			u_char data[3] = { 0x10, 0x00, 0x20 };
+			makeFRMR(tcb, hdlc_p, &outframe, data, 3);
+			send_flag = 1;
 		}
-		else if (GetTypes(*hdlc_p) == TYPERNR && frame_ind == 1 && frame_p_f == 1) //帧类型为RNR！
+		else if (GetTypes(*hdlc_p) == TYPERNR && tcb->started == 1 && tcb->frame_p_f == 1) //帧类型为RNR！
 		{
 			//当联合控制字段不允许信息字段时，接收到包含信息字段的帧，make FRMR
-			hdlc outframe;
-			makeFRMR(&tcb, hdlc_p, &outframe);
-			writetxt((FILE*)wc, write_str, 10);
-			//通过send()函数发送响应
-			m_strToServer = ("7E A0 08 21 02 23 97 50 E2 7E");
-			CStringA tempstr;
-			tempstr = m_strToServer;
-			nSentLen = m_sClientSocket.Send(tempstr, 100);
-			if (nSentLen != SOCKET_ERROR)
-			{
-				//发送成功
-				m_listSent.AddString(m_strToServer);
-				UpdateData(FALSE);
-			}
+			u_char data[3] = { 0x10, 0x00, 0x20 };
+			makeFRMR(tcb, hdlc_p, &outframe, data, 3);
+			send_flag = 1;
 		}
 		else m_liststateinfo.AddString(_T("不处理该类型的帧！"));
 	}
+
+	if (send_flag == 1)
+	{
+		_TCHAR  sendStr[1024];
+		u_char sendData[255];
+		convFrameHex(&outframe, write_str);
+		convFrameStr(&outframe, sendStr);
+		CString m_strToServer = sendStr;
+		writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
+		nSentLen = m_sClientSocket.Send(m_strToServer, 1024);
+		if (nSentLen != SOCKET_ERROR)
+		{
+			//发送成功
+			m_listSent.AddString(m_strToServer);
+		}
+	}
+	UpdateData(FALSE);
 	return;
 }
 
