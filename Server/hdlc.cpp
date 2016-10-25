@@ -1,5 +1,13 @@
 #include "stdafx.h"
 #include "framedef.h"
+
+u_char settingdata[23] = { 0x81, 0x80, 0x14, 0x05, 0x02, 0x00, 0x80, 0x06, 0x02, 0x00,
+0x80, 0x07, 0x04, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0x01 };
+int glen=3;
+u_char errorcode[3]{ 0x10, 0x00, 0x20};
+int gUAdatalen=23;
+
+
 int convFrameStr(hdlc *frame, _TCHAR* S)
 {
 	genFrameData(S, NULL, frame);
@@ -103,7 +111,7 @@ int convHexFrame(u_char *pData, hdlc *hdlc_p)
 		hdlc_p->ns = hdlc_p->frame_ctl >> 1 & 0x07;
 		
 	}
-	else if (hdlc_p->frame_ctl & 0x0A == 0) //RR和RNR帧 取出nr域
+	else if ((hdlc_p->frame_ctl & 0x0A) == 0) //RR和RNR帧 取出nr域
 	{
 		hdlc_p->nr = hdlc_p->frame_ctl >> 5;
 		hdlc_p->ns = 0;

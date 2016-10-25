@@ -116,6 +116,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="checksum.cpp" />
+    <ClCompile Include="eventhandler.cpp" />
+    <ClCompile Include="fsmswitch.cpp" />
     <ClCompile Include="hdlc.cpp" />
     <ClCompile Include="Server.cpp" />
     <ClCompile Include="ServerDlg.cpp" />

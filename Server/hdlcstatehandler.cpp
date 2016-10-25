@@ -1,58 +1,11 @@
 #include "eventhandler.h"
 #include "framedef.h"
-int makeUA(HdlcTcb *tcb,hdlc *frame,hdlc *outframe);
-//DEFHANDLER(STATE_WAIT_CONNECT, SNRM)
-//{
-//	u_char settingdata[23] = { 0x81, 0x80, 0x14, 0x05, 0x02, 0x00, 0x80, 0x06, 0x02, 0x00,
-//		0x80, 0x07, 0x04, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0x01 };
-//	int len = 23;
-//	makeUA(tcb, frame, outframe, settingdata, len);
-//}
-//DEFHANDLER(WAITDIS, DISC)
-//{
-//	u_char settingdata[23] = { 0x81, 0x80, 0x14, 0x05, 0x02, 0x00, 0x80, 0x06, 0x02, 0x00,
-//		0x80, 0x07, 0x04, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0x01 };
-//	int len = 23;
-//	makeUA(tcb, frame, outframe, settingdata, len);
-//}
-//DEFHANDLER(WAITCON, SNRM)
-//{
-//	u_char settingdata[23] = { 0x81, 0x80, 0x14, 0x05, 0x02, 0x00, 0x80, 0x06, 0x02, 0x00,
-//		0x80, 0x07, 0x04, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0x01 };
-//	int len = 23;
-//	makeUA(tcb, frame, outframe, settingdata, len);
-//}
-//DEFHANDLER(NRM, SNRM)
-//{
-//	u_char settingdata[23] = { 0x81, 0x80, 0x14, 0x05, 0x02, 0x00, 0x80, 0x06, 0x02, 0x00,
-//		0x80, 0x07, 0x04, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0x01 };
-//	int len = 23;
-//	makeUA(tcb, frame, outframe, settingdata, len);
-//}
-//
-//DEFHANDLER(NRM, RR)
-//{
-//	u_char errorinf[255];
-//	int len;
-//	int frame_p_f = ((frame->frame_ctl & 0x10) >> 4);
-//	if (frame->nr == tcb->send_num && frame_p_f == 1)
-//	{
-//		tcb->send_num++;//要检查它的原语中的FRAME_type  继续发送信息帧？？？
-//		makeRR(tcb, frame, outframe, tcb->rcv_num, POL); //RR帧ctl
-//		tcb->frame_p_f = POL;
-//	}
-//	else
-//	{
-//		//make FRMR
-//		errorinf[0] = 0x10; errorinf[1] = 0x00; errorinf[2] = 0x20;
-//		len = 3;
-//		makeFRMR(tcb, frame, outframe, errorinf, len);
-//	}
-//}
+
 
 
 
 //------------------------------------util functions--------------------------------------------
+int makeUA(HdlcTcb *tcb, hdlc *frame, hdlc *outframe);
 int makeRR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
 {
 	u_char pData[255];

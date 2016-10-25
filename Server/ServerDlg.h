@@ -6,6 +6,7 @@
 #include "ServerSocket.h"
 #include "afxwin.h"
 
+#define WM_INFO WM_USER+8
 // CServerDlg ¶Ô»°¿ò
 class CServerDlg : public CDialogEx
 {
@@ -50,4 +51,7 @@ public:
 	CListBox m_liststateinfo;
 
 //	void setHScroll();
+protected:
+	afx_msg LRESULT OnInfo(WPARAM wParam, LPARAM lParam);
+//	afx_msg LRESULT OnTest(WPARAM wParam, LPARAM lParam);
 };

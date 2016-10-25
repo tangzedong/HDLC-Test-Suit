@@ -9,7 +9,7 @@
 #include <assert.h>
 #pragma comment(lib,"ws2_32.lib")
 #include"string.h"
-#include <Windows.h>
+//#include <Windows.h>
 #include <tchar.h>
 #include "hdlcFSM.h"
 
@@ -17,7 +17,11 @@ typedef unsigned int u_int;   //32位
 typedef unsigned char u_char;  //8位
 typedef unsigned short u_short;//16位
 /*typedef unsigned double u_double;//64位  8字节*/
+u_char errorcode[];
+extern int glen;
 
+u_char settingdata[];
+extern int gUAdatalen;
 
 #define MAX_LEN 2048
 #define PPPINITFCS16 0xffff;             //初始FCS值
