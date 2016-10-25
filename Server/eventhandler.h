@@ -6,7 +6,7 @@
 #define DEFHANDLER(name) int\
 	H##name(HdlcTcb* tcb, hdlc* frame, hdlc* outframe)
 #define _HANDLER(name) H##name
-#define GETHANDLER(state) (*listStateHandler[state])
+#define GETHANDLER(state) (*(fsmstack->listhandler[state]))
 
 typedef int(*statehandler)(HdlcTcb*, hdlc*, hdlc*);
 

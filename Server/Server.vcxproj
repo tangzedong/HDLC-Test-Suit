@@ -128,7 +128,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="writetxt.cpp" />
-    <ClCompile Include="hdlcstatehandler.cpp" />
+    <ClCompile Include="hdlcFrameMaker.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Server.rc" />
