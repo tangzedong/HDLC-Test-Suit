@@ -5,8 +5,8 @@
 
 
 //------------------------------------util functions--------------------------------------------
-int makeUA(HdlcTcb *tcb, hdlc *frame, hdlc *outframe);
-int makeRR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
+//int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);
+int makeRR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -39,7 +39,7 @@ int makeRR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
 	return 0;
 }
 
-int makeRNR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
+int makeRNR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -72,7 +72,7 @@ int makeRNR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
 	return 0;
 }
 
-int makeUI(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int pf)
+int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int pf)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -104,7 +104,7 @@ int makeUI(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int pf)
 	return 0;
 }
 
-int makeSNRM(HdlcTcb *tcb, hdlc *frame, hdlc *outframe)
+int makeSNRM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -136,7 +136,7 @@ int makeSNRM(HdlcTcb *tcb, hdlc *frame, hdlc *outframe)
 	return 0;
 }
 
-int makeDM(HdlcTcb *tcb, hdlc *frame, hdlc *outframe)
+int makeDM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -169,7 +169,7 @@ int makeDM(HdlcTcb *tcb, hdlc *frame, hdlc *outframe)
 	return 0;
 }
 
-int makeDISC(HdlcTcb *tcb, hdlc *frame, hdlc *outframe)
+int makeDISC(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -202,7 +202,7 @@ int makeDISC(HdlcTcb *tcb, hdlc *frame, hdlc *outframe)
 	return 0;
 }
 
-int makeFRMR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen)
+int makeFRMR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -243,7 +243,7 @@ int makeFRMR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int i
 	return 0;
 }
 
-int makeUA(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int len)
+int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int len)
 {
 	outframe->start_flag = STARTFLAG;
 	outframe->f_format.frame_type = FFORMTYPE;
@@ -285,7 +285,7 @@ int makeUA(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int
 	return 0;
 }
 
-int makeI(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen, u_int seg, u_int pf)
+int makeI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen, u_int seg, u_int pf)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;

@@ -12,7 +12,7 @@
 //#include <Windows.h>
 #include <tchar.h>
 #include "hdlcFSM.h"
-
+typedef struct _statparam HdlcStationParam;
 typedef unsigned int u_int;   //32λ
 typedef unsigned char u_char;  //8λ
 typedef unsigned short u_short;//16λ
@@ -130,14 +130,16 @@ int convStrHex(_TCHAR* S, u_char* pData);
 int outHexStr(_TCHAR* S, u_char *pRawData, int index, int *bytesidx, u_char byte);
 void genFrameData(_TCHAR *S, u_char *pRawData, hdlc *frame);
 
+int makeRR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf);
+int makeRNR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf);
+int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int pf);
+int makeSNRM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);
+int makeDISC(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);
+int makeDM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);
+int makeFRMR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen);
+int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int len);
+
 u_int GetTypes(hdlc &frame);
 
-int makeRR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf);
-int makeRNR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf);
-int makeUI(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_int pf);
-int makeSNRM(HdlcTcb *tcb, hdlc *frame, hdlc *outframe);
-int makeDISC(HdlcTcb *tcb, hdlc *frame, hdlc *outframe);
-int makeDM(HdlcTcb *tcb, hdlc *frame, hdlc *outframe);
-int makeFRMR(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen);
-int makeUA(HdlcTcb *tcb, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int len);
+
 #endif

@@ -48,10 +48,13 @@ public:
 	void onReceive(void);
 	CServerSocket m_sServerSocket;  //监听套接字
 	CServerSocket m_sClientSocket;  //连接套接字
+	CServerSocket m_sLoopSocket;  //连接套接字
 	CListBox m_liststateinfo;
 
 //	void setHScroll();
 protected:
 	afx_msg LRESULT OnInfo(WPARAM wParam, LPARAM lParam);
 //	afx_msg LRESULT OnTest(WPARAM wParam, LPARAM lParam);
+public:
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
 };

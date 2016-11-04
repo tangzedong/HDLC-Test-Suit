@@ -111,6 +111,7 @@ BEGIN_MESSAGE_MAP(CServerDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_SEND, &CServerDlg::OnClickedButtonSend)
 	ON_MESSAGE(WM_INFO, &CServerDlg::OnInfo)
 //	ON_REGISTERED_MESSAGE(WM_TEST, &CServerDlg::OnTest)
+ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 
@@ -169,10 +170,8 @@ BOOL CServerDlg::OnInitDialog()
 	SendDlgItemMessage(IDC_LIST_RECEIVED, LB_SETHORIZONTALEXTENT, (WPARAM)1000, 0);
 	SendDlgItemMessage(IDC_LIST_STATEINFO, LB_SETHORIZONTALEXTENT, (WPARAM)1000, 0);
 
-	HdlcTcb *pTcb = new HdlcTcb();
-	pTcb->listhandler = (StateHandler)PrimaryStateHandler;
-	FSMinit(NULL);
-	fsmstack->curstate = STATE_NDM;//初始化状态机
+
+	FSMinit();
 	gstpar->nr = 0;
 	gstpar->ns = 0;
 	gstpar->started = 0;
@@ -180,7 +179,7 @@ BOOL CServerDlg::OnInitDialog()
 	gstpar->rcv_num = 0;
 	gstpar->send_num = 0;
 	gstpar->frmr_flag = 0;
-
+	gstpar->disc = 1;
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -323,6 +322,8 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	int nReceivedLen;
 	CString strReceived;
 
+	!gstpar->disc && KillTimer(1);//关闭超时计数器
+
 	nReceivedLen = m_sClientSocket.Receive(buff, nBufferSize);  //Receive()函数真正执行接收功能
 	//返回接收到的字节数     (如果连接被关闭了，返回0；否则返回SOCKET_ERROR)
 	if (nReceivedLen == SOCKET_ERROR)  //接收成功
@@ -342,12 +343,11 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	convStrHex(szTemp.GetBuffer(), str);
 
 	//-----------------------------------------------------------将结构体赋值----------------------------------------------------------------------
-	HdlcTcb *pTcb = new HdlcTcb();
-	pTcb->fsmtype = FSMTypePrimary;
-	pTcb->listhandler = (int(*)(HdlcTcb*, hdlc*, hdlc*))PrimaryStateHandler;
-	pTcb->error = FSMenter(pTcb);
+
+	FSMenter(FSMTypePrehandleFrame);
 	u_int res = convHexFrame(str, hdlc_p);
 	FSMreturn();
+	
 	//-----------------------------------------------------------错误处理--------------------------------------------------------------------------
 	switch (res)
 	{
@@ -442,7 +442,7 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 		gstpar->save_inf = save_inf;
 		gstpar->hWnd = this;
 
-		fsmstack->curstate = STATE_NDM;
+		//fsmstack->curstate = STATE_NDM;
 	}
 	gstpar->nr = hdlc_p->nr;
 	gstpar->ns = hdlc_p->ns;
@@ -451,8 +451,8 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	u_int i_length = hdlc_p->infolen;
 	gstpar->frame_p_f = hdlc_p->pollfin;
 
+	GETHANDLER(fsmstack->curstate)(gstpar, hdlc_p, &outframe);
 
-	GETHANDLER(tcb->curstate)(tcb, hdlc_p, &outframe);
 	if (gstpar->send_flag == 1)
 	{
 		_TCHAR  sendStr[1024];
@@ -469,6 +469,9 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 		}
 	}
 	UpdateData(FALSE);
+
+	!gstpar->disc && SetTimer(1, 10000, NULL);
+
 	return;
 }
 
@@ -512,3 +515,31 @@ afx_msg LRESULT CServerDlg::OnInfo(WPARAM wParam, LPARAM lParam)
 //{
 //	return 0;
 //}
+
+
+void CServerDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	// TODO:  在此添加消息处理程序代码和/或调用默认值
+	u_int timerid = (u_int)nIDEvent;
+	if (timerid == 1)
+	{
+		m_liststateinfo.AddString(_T("Idle Timeout Disconnect!"));
+		m_liststateinfo.SetCurSel(m_liststateinfo.GetCount() - 1);
+	}
+	_TCHAR outstr[255];
+	hdlcpointer outframe = (hdlcpointer)malloc(sizeof(hdlc));
+	makeDISC(gstpar, hdlc_p, outframe);
+	memset(hdlc_p, 0, sizeof(*hdlc_p));//动态分配空间，全部置零
+	FSMinit();
+	gstpar->nr = 0;
+	gstpar->ns = 0;
+	gstpar->started = 0;
+	gstpar->frame_p_f = 0;
+	gstpar->rcv_num = 0;
+	gstpar->send_num = 0;
+	gstpar->frmr_flag = 0;
+	gstpar->disc = 1;
+	UpdateData(FALSE);
+	KillTimer(timerid);
+	CDialogEx::OnTimer(nIDEvent);
+}

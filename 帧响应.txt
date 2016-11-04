@@ -5,6 +5,7 @@
 #include "eventhandler.h"
 #include "framedef.h"
 statehandler PrimaryStateHandler[] = {
+	NULL,
 	_HANDLER(hdlcStateNDM),
 	_HANDLER(hdlcStateWCN),
 	_HANDLER(hdlcStateNRM),
@@ -12,21 +13,17 @@ statehandler PrimaryStateHandler[] = {
 };
 
 statehandler PrehandleStateHandler[] = {
-	NULL
+	NULL,
 };
 
 statehandler NRMStateHandler[] = {
-	_HANDLER(hdlcStateNRMIdle),
-	_HANDLER(hdlcStateNRMHandle2),
-	_HANDLER(hdlcStateNRMIR)
+	NULL,
 };
 
 statehandler IRStateHandler[] = {
-	_HANDLER(hdlcStateIRWaitCmd),
-	_HANDLER(hdlcStateIRWaitRes),
-	_HANDLER(hdlcStateIRHandle3)
+	NULL,
 };
-statehandler *StateHandlers[] = { PrimaryStateHandler, PrehandleStateHandler, NRMStateHandler, IRStateHandler };
+
 //-----------------------------------Primary FSM---------------------------------------------------------------
 DEFHANDLER(hdlcStateNDM)
 {
@@ -99,7 +96,6 @@ DEFHANDLER(hdlcStateWCN)
 		fsmstack->curstate = STATE_NRM;              //转移到NRM状态
 		stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("已经处于NRM状态！"), NULL);
 		stpar->send_flag = 1;
-		stpar->disc = 0;
 	}
 	else if (GetTypes(*frame) == TYPEDISC && stpar->started == 1 && stpar->frame_p_f == 1)     //帧类型为DISC！
 	{
@@ -158,8 +154,7 @@ DEFHANDLER(hdlcStateWCN)
 
 DEFHANDLER(hdlcStateNRM)
 {
-	FSMenter(FSMTypeNRM);
-	GETHANDLER(fsmstack->curstate)(stpar, frame, outframe);
+
 	return 0;
 }
 
@@ -187,7 +182,6 @@ DEFHANDLER(hdlcStateWDC)
 			makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
 			stpar->send_flag = 1;
 			fsmstack->curstate = STATE_NDM;
-			stpar->disc = 1;
 		}
 	}
 	else if (GetTypes(*frame) == TYPERR && stpar->started == 1 && stpar->frame_p_f == 1)//帧类型为RR！
@@ -221,9 +215,17 @@ DEFHANDLER(hdlcStateNRMIdle)
 	}
 	else if (GetTypes(*frame) == TYPEDISC && stpar->started == 1 && stpar->frame_p_f == 1)     //帧类型为DISC！
 	{
-		FSMreturn();
-		fsmstack->curstate = STATE_WAIT_DISCONNECT;
-		GETHANDLER(STATE_WAIT_DISCONNECT)(stpar, frame, outframe);
+		if (frame->infolen > 0)
+		{
+			makeFRMR(stpar, frame, outframe, errorcode, glen);
+			stpar->send_flag = 1;
+			stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("拒绝带信息的DISC帧！"), NULL);
+		}
+		else
+		{
+			fsmstack->curstate = STATE_WAIT_DISCONNECT;
+			GETHANDLER(STATE_WAIT_DISCONNECT)(stpar, frame, outframe);
+		}
 	}
 	else if (GetTypes(*frame) == TYPERR && stpar->started == 1 && stpar->frame_p_f == 1)//帧类型为RR！
 	{
@@ -256,8 +258,143 @@ DEFHANDLER(hdlcStateNRMIdle)
 	}
 	else if ((frame->frame_ctl & 1) == 0 && stpar->started == 1 && stpar->frame_p_f == 1)     //帧类型为I！
 	{
-		fsmstack->curstate = STATE_IREPONSE_HANDLE;
-		GETHANDLER(STATE_IREPONSE_HANDLE)(stpar, frame, outframe);
+		u_char write_str[255];
+		if (frame->nr != stpar->send_num || stpar->ns != stpar->rcv_num)
+		{
+			stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("序号错误，拒绝接收该帧！"), NULL);
+			//make FRMR   输出
+			write_str[0] = 0x7E;
+			write_str[1] = 0xA0;
+			write_str[2] = 0x08;
+			write_str[3] = 0x21;
+			write_str[4] = 0x02;
+			write_str[5] = 0x23;
+			write_str[6] = 0x97;
+			write_str[7] = 0x50;
+			write_str[8] = 0xE2;
+			write_str[9] = 0x7E;//写入记事本
+		}
+		else
+		{
+			if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 && stpar->m != 0)//分段的最后一帧，由m控制
+			{
+				//for(u_int n = 0;n < (m + 1);n++)//上报，获得需要返回的信息域
+				// {
+				write_str[0] = 0x7E;
+				write_str[1] = 0xA0;
+				write_str[2] = 0x2E;
+				write_str[3] = 0x21;
+				write_str[4] = 0x02;
+				write_str[5] = 0x23;
+				u_char s_rcv = (frame->ns + 1) << 5;
+				u_char s_send = frame->nr;
+				write_str[6] = s_rcv | s_send | 16;
+				write_str[7] = 0xE0;//HCS要计算出来的？？？
+				write_str[8] = 0xAE;//
+				write_str[9] = 0xE6;
+				write_str[10] = 0xE7;
+				write_str[11] = 0x00;
+				write_str[12] = 0x61;
+				write_str[13] = 0x1F;
+				write_str[14] = 0xA1;
+				write_str[15] = 0x09;
+				write_str[16] = 0x06;
+				write_str[17] = 0x07;
+				write_str[18] = 0x60;
+				write_str[19] = 0x85;
+				write_str[20] = 0x74;
+				write_str[21] = 0x05;
+				write_str[22] = 0x08;
+				write_str[23] = 0x01;
+				write_str[24] = 0x01;
+				write_str[25] = 0xA2;
+				write_str[26] = 0x03;
+				write_str[27] = 0x02;
+				write_str[28] = 0x01;
+				write_str[29] = 0x01;
+				write_str[30] = 0xA3;
+				write_str[31] = 0x05;
+				write_str[32] = 0xA1;
+				write_str[33] = 0x03;
+				write_str[34] = 0x02;
+				write_str[35] = 0x01;
+				write_str[36] = 0x0D;
+				write_str[37] = 0xBE;
+				write_str[38] = 0x06;
+				write_str[39] = 0x04;
+				write_str[40] = 0x04;
+				write_str[41] = 0x0E;
+				write_str[42] = 0x01;
+				write_str[43] = 0x06;
+				write_str[44] = 0x01;
+				write_str[45] = 0x6C;//
+				write_str[46] = 0x71;//FCS是计算出来的？？？
+				write_str[47] = 0x7E;
+			}
+			else if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 && stpar->m == 0)//保证是完整的一帧  FRAME_type 为I_COMPLETE，整个帧
+			{
+				write_str[0] = 0x7E;
+				write_str[1] = 0xA0;
+				write_str[2] = 0x08;
+				write_str[3] = 0x21;
+				write_str[4] = 0x02;
+				write_str[5] = 0x23;
+				switch (stpar->rcv_num)
+				{
+				case 0:write_str[6] = 0x11;	write_str[7] = 0x6E; write_str[8] = 0x03; break;
+				case 1:write_str[6] = 0x31; write_str[7] = 0x6C; write_str[8] = 0x22; break;
+				case 2:write_str[6] = 0x51; write_str[7] = 0x6A; write_str[8] = 0x41; break;
+				case 3:write_str[6] = 0x71; write_str[7] = 0x68; write_str[8] = 0x60; break;
+				case 4:write_str[6] = 0x91; write_str[7] = 0x66; write_str[8] = 0x87; break;
+				case 5:write_str[6] = 0xB1; write_str[7] = 0x64; write_str[8] = 0xA6; break;
+				case 6:write_str[6] = 0xD1; write_str[7] = 0x62; write_str[8] = 0xC5; break;
+				case 7:write_str[6] = 0xF1; write_str[7] = 0x60; write_str[8] = 0xE4; break;
+				}
+				write_str[9] = 0x7E;
+			}
+			else if (frame->f_format.frame_seg == 1 && frame->pollfin == 0)//每一波分帧的一部分
+			{
+				for (u_int n = 0; n < frame->infolen; n++)
+				{
+					stpar->save_inf[stpar->m] = frame->info_buff[n];
+					stpar->m++;
+				}
+
+				stpar->rcv_num++;
+				if (stpar->rcv_num % 8 == 0)
+					stpar->rcv_num = 0;
+			}
+			else if (frame->f_format.frame_seg == 1 && frame->pollfin == 1)//每一波分帧的最后一部分
+			{
+				for (u_int n = 0; n < frame->infolen; n++)
+				{
+					stpar->save_inf[stpar->m] = frame->info_buff[n];
+					stpar->m++;
+				}
+				stpar->rcv_num++;
+				if (stpar->rcv_num % 8 == 0)
+					stpar->rcv_num = 0;
+				//make RR   将要接收的序号也要改
+				write_str[0] = 0x7E;
+				write_str[1] = 0xA0;
+				write_str[2] = 0x08;
+				write_str[3] = 0x21;
+				write_str[4] = 0x02;
+				write_str[5] = 0x23;
+				switch (stpar->rcv_num)
+				{
+				case 0:write_str[6] = 0x11;	write_str[7] = 0x6E; write_str[8] = 0x03; break;
+				case 1:write_str[6] = 0x31; write_str[7] = 0x6C; write_str[8] = 0x22; break;
+				case 2:write_str[6] = 0x51; write_str[7] = 0x6A; write_str[8] = 0x41; break;
+				case 3:write_str[6] = 0x71; write_str[7] = 0x68; write_str[8] = 0x60; break;
+				case 4:write_str[6] = 0x91; write_str[7] = 0x66; write_str[8] = 0x87; break;
+				case 5:write_str[6] = 0xB1; write_str[7] = 0x64; write_str[8] = 0xA6; break;
+				case 6:write_str[6] = 0xD1; write_str[7] = 0x62; write_str[8] = 0xC5; break;
+				case 7:write_str[6] = 0xF1; write_str[7] = 0x60; write_str[8] = 0xE4; break;
+				}
+				write_str[9] = 0x7E;
+			}
+		}
 	}
 	else
 	{
@@ -268,123 +405,26 @@ DEFHANDLER(hdlcStateNRMIdle)
 
 DEFHANDLER(hdlcStateNRMHandle2)
 {
-	return 0;
+
 }
 
 DEFHANDLER(hdlcStateNRMIR)
 {
-	FSMenter(FSMTypeIResponse);
-	GETHANDLER(fsmstack->curstate)(stpar, frame, outframe);
-	return 0;
+
 }
 //-----------------------------------IR FSM---------------------------------------------------------------
 //to do
 DEFHANDLER(hdlcStateIRWaitCmd)
 {
-	u_char write_str[255];
-	if (frame->nr != stpar->send_num || stpar->ns != stpar->rcv_num)
-	{
-		stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("序号错误，拒绝接收该帧！"), NULL);
-		//make FRMR   输出
-		makeFRMR(stpar, frame, outframe, (u_char*)"", 0);
-	}
-	else
-	{
 
-		if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 && stpar->m == 0)//保证是完整的一帧  FRAME_type 为I_COMPLETE，整个帧
-		{
-			makeRR(stpar, frame, outframe, stpar->rcv_num, stpar->frame_p_f);
-		}
-		else if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 && stpar->m != 0)//分段的最后一帧，由m控制F=1, S=0
-		{
-			//for(u_int n = 0;n < (m + 1);n++)//上报，获得需要返回的信息域
-			// {
-			write_str[0] = 0x7E;
-			write_str[1] = 0xA0;
-			write_str[2] = 0x2E;
-			write_str[3] = 0x21;
-			write_str[4] = 0x02;
-			write_str[5] = 0x23;
-			u_char s_rcv = (frame->ns + 1) << 5;
-			u_char s_send = frame->nr;
-			write_str[6] = s_rcv | s_send | 16;
-			write_str[7] = 0xE0;//HCS要计算出来的？？？
-			write_str[8] = 0xAE;//
-			write_str[9] = 0xE6;
-			write_str[10] = 0xE7;
-			write_str[11] = 0x00;
-			write_str[12] = 0x61;
-			write_str[13] = 0x1F;
-			write_str[14] = 0xA1;
-			write_str[15] = 0x09;
-			write_str[16] = 0x06;
-			write_str[17] = 0x07;
-			write_str[18] = 0x60;
-			write_str[19] = 0x85;
-			write_str[20] = 0x74;
-			write_str[21] = 0x05;
-			write_str[22] = 0x08;
-			write_str[23] = 0x01;
-			write_str[24] = 0x01;
-			write_str[25] = 0xA2;
-			write_str[26] = 0x03;
-			write_str[27] = 0x02;
-			write_str[28] = 0x01;
-			write_str[29] = 0x01;
-			write_str[30] = 0xA3;
-			write_str[31] = 0x05;
-			write_str[32] = 0xA1;
-			write_str[33] = 0x03;
-			write_str[34] = 0x02;
-			write_str[35] = 0x01;
-			write_str[36] = 0x0D;
-			write_str[37] = 0xBE;
-			write_str[38] = 0x06;
-			write_str[39] = 0x04;
-			write_str[40] = 0x04;
-			write_str[41] = 0x0E;
-			write_str[42] = 0x01;
-			write_str[43] = 0x06;
-			write_str[44] = 0x01;
-			write_str[45] = 0x6C;//
-			write_str[46] = 0x71;//FCS是计算出来的？？？
-			write_str[47] = 0x7E;
-		}
-		else if (frame->f_format.frame_seg == 1 && frame->pollfin == 0)//每一波分帧的一部分F=0, S=1
-		{
-			for (u_int n = 0; n < frame->infolen; n++)
-			{
-				stpar->save_inf[stpar->m] = frame->info_buff[n];
-				stpar->m++;
-			}
-
-			stpar->rcv_num++;
-			if (stpar->rcv_num % 8 == 0)
-				stpar->rcv_num = 0;
-		}
-		else if (frame->f_format.frame_seg == 1 && frame->pollfin == 1)//每一波分帧的最后一部分F=1, S=1
-		{
-			for (u_int n = 0; n < frame->infolen; n++)
-			{
-				stpar->save_inf[stpar->m] = frame->info_buff[n];
-				stpar->m++;
-			}
-			stpar->rcv_num++;
-			if (stpar->rcv_num % 8 == 0)
-				stpar->rcv_num = 0;
-			//make RR   将要接收的序号也要改
-			makeRR(stpar, frame, outframe, stpar->rcv_num, stpar->frame_p_f);
-		}
-	}
-	return 0;
 }
 
 DEFHANDLER(hdlcStateIRWaitRes)
 {
-	return 0;
+
 }
 
 DEFHANDLER(hdlcStateIRHandle3)
 {
-	return 0;
+
 }
