@@ -37,7 +37,7 @@ int nSentLen;
 HdlcTcb _tcb;
 HdlcTcb *tcb = &_tcb;
 HdlcStationParam _stpar;
-HdlcStationParam *gstpar = &_stpar;
+
 DWORD curtime;
 
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
@@ -112,6 +112,7 @@ BEGIN_MESSAGE_MAP(CServerDlg, CDialogEx)
 	ON_MESSAGE(WM_INFO, &CServerDlg::OnInfo)
 //	ON_REGISTERED_MESSAGE(WM_TEST, &CServerDlg::OnTest)
 ON_WM_TIMER()
+ON_MESSAGE(WM_REPORTEVENT, &CServerDlg::OnReportEvent)
 END_MESSAGE_MAP()
 
 
@@ -172,14 +173,10 @@ BOOL CServerDlg::OnInitDialog()
 
 
 	FSMinit();
-	gstpar->nr = 0;
-	gstpar->ns = 0;
-	gstpar->started = 0;
-	gstpar->frame_p_f = 0;
-	gstpar->rcv_num = 0;
-	gstpar->send_num = 0;
-	gstpar->frmr_flag = 0;
-	gstpar->disc = 1;
+
+	gstpar = &_stpar;
+	HdlcParamInit();
+	
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -236,12 +233,13 @@ HCURSOR CServerDlg::OnQueryDragIcon()
 void CServerDlg::OnClickedButtonListen()
 {
 	// TODO: 在此添加控件通知处理程序代码
-
+	int opt = 1;
 	UpdateData(TRUE);   //刷新控件的值到对应的变量(外部输入值交给内部变量)
 	GetDlgItem(IDC_BUTTON_LISTEN)->EnableWindow(FALSE);
 	GetDlgItem(IDC_EDIT_SERVERNAME)->EnableWindow(FALSE);
 	GetDlgItem(IDC_EDIT_SERVERPORT)->EnableWindow(FALSE);
 	m_sServerSocket.Create(m_nServerPort);//创建套接字，并进行主机名解析以及端口号绑定
+	m_sServerSocket.SetSockOpt(SO_REUSEADDR, &opt, sizeof(opt));
 	m_sServerSocket.Listen(); //开始监听
 
 	//清除两个列表框信息
@@ -323,6 +321,7 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	CString strReceived;
 
 	!gstpar->disc && KillTimer(1);//关闭超时计数器
+	gstpar->send_flag = 0;	//是否发送响应帧
 
 	nReceivedLen = m_sClientSocket.Receive(buff, nBufferSize);  //Receive()函数真正执行接收功能
 	//返回接收到的字节数     (如果连接被关闭了，返回0；否则返回SOCKET_ERROR)
@@ -412,8 +411,11 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	case TYPERNR:
 		m_liststateinfo.AddString(_T("帧类型为RNR！"));
 		break;
+	case TYPEUI:
+		m_liststateinfo.AddString(_T("帧类型为RNR！"));
+		break;
 	default:
-		AfxMessageBox(_T("控制域类型错误或源地址长度超过1字节！"), MB_OK | MB_ICONSTOP);
+		m_liststateinfo.AddString(_T("frmr:控制域类型错误或源地址长度超过1字节！"));
 		gstpar->frmr_flag = 1;
 		return;
 	}
@@ -423,14 +425,14 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	h_cs_val = h_cs_cal(str, hdlc_p->dst_addrlen);
 	if (hdlc_p->h_cs != h_cs_val)
 	{
-		AfxMessageBox(_T("HCS校验出错！！！"), MB_OK | MB_ICONSTOP);
+		m_liststateinfo.AddString(_T("error:HCS校验出错！！！"));
 		return;
 	}
 
 	//帧结束标志检测
 	if (hdlc_p->end_flag != 0x7E)
 	{
-		AfxMessageBox(_T("帧接收超时,没有结尾标志！！！"), MB_OK | MB_ICONSTOP);//等待超时结束，没有检测到帧结束标志
+		m_liststateinfo.AddString(_T("error:帧接收超时,没有结尾标志！！！"));//等待超时结束，没有检测到帧结束标志
 		return;
 	}
 
@@ -447,11 +449,31 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	gstpar->nr = hdlc_p->nr;
 	gstpar->ns = hdlc_p->ns;
 	hdlc outframe;//输出帧
-	gstpar->send_flag = 0;//是否发送响应帧
+
 	u_int i_length = hdlc_p->infolen;
 	gstpar->frame_p_f = hdlc_p->pollfin;
 
 	GETHANDLER(fsmstack->curstate)(gstpar, hdlc_p, &outframe);
+
+
+	if (gstpar->canUISend == 1 && gstpar->canUISend == 1)
+	{
+		_TCHAR  sendStr[1024];
+		u_char sendData[255];
+		convFrameHex(&gUIFrame, write_str);
+		convFrameStr(&gUIFrame, sendStr);
+		CString m_strToServer = sendStr;
+		writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
+		nSentLen = m_sClientSocket.Send(m_strToServer, 1024);
+		if (nSentLen != SOCKET_ERROR)
+		{
+			//发送成功
+			m_listSent.AddString(_T("发送UI帧"));
+			m_listSent.AddString(m_strToServer);
+		}
+		gstpar->canUISend = 0;
+		gstpar->isUIWaiting = 0;
+	}
 
 	if (gstpar->send_flag == 1)
 	{
@@ -468,6 +490,8 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 			m_listSent.AddString(m_strToServer);
 		}
 	}
+
+
 	UpdateData(FALSE);
 
 	!gstpar->disc && SetTimer(1, 10000, NULL);
@@ -523,7 +547,7 @@ void CServerDlg::OnTimer(UINT_PTR nIDEvent)
 	u_int timerid = (u_int)nIDEvent;
 	if (timerid == 1)
 	{
-		m_liststateinfo.AddString(_T("Idle Timeout Disconnect!"));
+		m_liststateinfo.AddString(_T("warning:Idle Timeout Disconnect!"));
 		m_liststateinfo.SetCurSel(m_liststateinfo.GetCount() - 1);
 	}
 	_TCHAR outstr[255];
@@ -542,4 +566,17 @@ void CServerDlg::OnTimer(UINT_PTR nIDEvent)
 	UpdateData(FALSE);
 	KillTimer(timerid);
 	CDialogEx::OnTimer(nIDEvent);
+}
+
+
+afx_msg LRESULT CServerDlg::OnReportEvent(WPARAM wParam, LPARAM lParam)
+{
+	u_char *data = (u_char*)wParam;
+	u_int size = (u_int)lParam;
+	for (u_int i = 0; i < size; i++)
+	{
+		gUIInfoBuf[i] = data[i];
+	}
+	gstpar->isUIWaiting = 1;
+	return 0;
 }

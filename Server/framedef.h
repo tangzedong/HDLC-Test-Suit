@@ -13,6 +13,7 @@
 #include <tchar.h>
 #include "hdlcFSM.h"
 typedef struct _statparam HdlcStationParam;
+typedef struct hdlc hdlc, *hdlcpointer;
 typedef unsigned int u_int;   //32位
 typedef unsigned char u_char;  //8位
 typedef unsigned short u_short;//16位
@@ -22,6 +23,10 @@ extern int glen;
 
 u_char settingdata[];
 extern int gUAdatalen;
+extern hdlc gUIFrame;
+extern u_char gUIInfoBuf[];
+extern u_int gUIInfoLen;
+extern HdlcStationParam *gstpar;
 
 #define MAX_LEN 2048
 #define PPPINITFCS16 0xffff;             //初始FCS值
@@ -132,7 +137,7 @@ void genFrameData(_TCHAR *S, u_char *pRawData, hdlc *frame);
 
 int makeRR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf);
 int makeRNR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf);
-int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int pf);
+int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char* data, u_int infolen);
 int makeSNRM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);
 int makeDISC(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);
 int makeDM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);

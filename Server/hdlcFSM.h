@@ -8,6 +8,16 @@
 //#include "eventhandler.h"
 #define INT8U unsigned short
 #define INT16U unsigned short
+
+//mac layer parameters
+//timeout
+#define TO_INACTIVE 20000//Inactivity time - out
+#define TO_WAIT_RESP 20000// response timeout
+#define TO_INTERFRAME 20000// NO USED RECENTLY, Inter - frame time - out, between reciving bytes
+#define MAX_INF_LEN 0x80//Default Maximum information field length
+#define WIN_SIZE 1//window size
+#define MAX_NB_OF_RETRIES 10//retrying times
+
 typedef struct hdlc hdlc, *hdlcpointer;
 //States of Primary FSM
 enum{
@@ -15,7 +25,8 @@ enum{
 	STATE_WAIT_CONNECT,
 	STATE_NRM,
 	STATE_WAIT_DISCONNECT,
-	STATE_WAIT_FRMR
+	STATE_WAIT_FRMR,
+	STATE_FRMR
 };
 
 //States of NRM FSM
@@ -50,6 +61,17 @@ typedef struct _statparam
 	unsigned char frame_discard_flag;   //ÎÞÐ§Ö¡±êÖÂ
 
 	unsigned char disc;
+
+	unsigned char discard;
+	unsigned char frmr;
+
+	unsigned int max_rcv_info_size;
+	unsigned int windowsize;
+
+	unsigned char canUISend;
+	unsigned char isUIWaiting;
+
+	unsigned char isTransFinish;
 } HdlcStationParam;
 
 typedef struct _hdlctcb
@@ -83,4 +105,7 @@ typedef struct {
 int FSMinit();
 int FSMreturn(void);
 int FSMenter(u_int fsmtype);
+int HdlcSetOpt(hdlcpointer frame);
+void HdlcParamInit();
+int HdlcSetParam(u_char* paramstr, u_int len);
 #endif

@@ -27,7 +27,7 @@ int HhdlcStateNDM(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateWCN(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateNRM(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateWDC(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
-
+int HhdlcStateFRMR(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 //DEFHANDLER(hdlcStateNRMIdle),
 //DEFHANDLER(hdlcStateNRMHandle2),
 //DEFHANDLER(hdlcStateNRMIR)

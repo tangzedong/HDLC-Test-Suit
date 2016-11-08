@@ -36,6 +36,7 @@ int makeRR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int p
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
+	tcb->send_flag = 1;
 	return 0;
 }
 
@@ -69,10 +70,11 @@ int makeRNR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int 
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
+	tcb->send_flag = 1;
 	return 0;
 }
 
-int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int pf)
+int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -81,14 +83,18 @@ int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int pf)
 	outframe->frame_ctl = TYPEUI;
 	outframe->nr = 0;
 	outframe->ns = 0;
-	outframe->pollfin = pf;
-	outframe->infolen = 0;
+	outframe->pollfin = 1;
+	outframe->infolen = infolen;
 	outframe->dst_addr = frame->src_addr;
 	outframe->dst_addrlen = frame->src_addrlen;
 	outframe->src_addr = frame->dst_addr;
 	outframe->src_addrlen = frame->dst_addrlen;
 	outframe->f_format.frame_sublen = frame->src_addrlen + frame->dst_addrlen + 5;
 	outframe->end_flag = STARTFLAG;
+	for (int i = 0; i <= infolen; i++)
+	{
+		outframe->info_buff[i] = infobuf[i];
+	}
 	convFrameHex(outframe, pData);
 	//caluate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
@@ -96,11 +102,13 @@ int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int pf)
 	*(pData + 1 + offest) = outframe->h_cs >> 8;
 	*(pData + 1 + offest + 1) = outframe->h_cs & 0x0F;
 
+
 	//caluate f_cs
 	if (outframe->infolen > 0)
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
+	tcb->send_flag = 1;
 	return 0;
 }
 
@@ -133,6 +141,7 @@ int makeSNRM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
+	tcb->send_flag = 1;
 	return 0;
 }
 
@@ -166,6 +175,7 @@ int makeDM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen-2);
 	}
+	tcb->send_flag = 1;
 	return 0;
 }
 
@@ -199,6 +209,7 @@ int makeDISC(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
+	tcb->send_flag = 1;
 	return 0;
 }
 
@@ -240,6 +251,7 @@ int makeFRMR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
+	tcb->send_flag = 1;
 	return 0;
 }
 
@@ -282,6 +294,7 @@ int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *settingda
 	{
 		outframe->f_cs = f_cs_cal(pData, len + outframe->src_addrlen);
 	}
+	tcb->send_flag = 1;
 	return 0;
 }
 
@@ -323,5 +336,6 @@ int makeI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
+	tcb->send_flag = 1;
 	return 0;
 }

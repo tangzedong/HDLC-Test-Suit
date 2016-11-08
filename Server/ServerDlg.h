@@ -7,6 +7,7 @@
 #include "afxwin.h"
 
 #define WM_INFO WM_USER+8
+#define WM_REPORTEVENT WM_USER+9
 // CServerDlg ¶Ô»°¿ò
 class CServerDlg : public CDialogEx
 {
@@ -57,4 +58,6 @@ protected:
 //	afx_msg LRESULT OnTest(WPARAM wParam, LPARAM lParam);
 public:
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
+protected:
+	afx_msg LRESULT OnReportEvent(WPARAM wParam, LPARAM lParam);
 };

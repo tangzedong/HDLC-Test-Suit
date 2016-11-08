@@ -6,7 +6,11 @@ u_char settingdata[23] = { 0x81, 0x80, 0x14, 0x05, 0x02, 0x00, 0x80, 0x06, 0x02,
 int glen=3;
 u_char errorcode[3]={ 0x10, 0x00, 0x20};
 int gUAdatalen=23;
+hdlc gUIFrame;
+u_char gUIInfoBuf[255];
+u_int gUIInfoLen;
 
+HdlcStationParam *gstpar;
 
 int convFrameStr(hdlc *frame, _TCHAR* S)
 {
@@ -298,4 +302,27 @@ u_int GetTypes(hdlc &frame)
 		return TYPEUI;
 	}
 	return 0xFFFFFFFF;
+}
+
+
+int HdlcSetOpt(HdlcStationParam *par, hdlcpointer frame){
+	return 0;
+}
+
+void HdlcParamInit(){
+	gstpar->nr = 0;
+	gstpar->ns = 0;
+	gstpar->started = 0;
+	gstpar->frame_p_f = 0;
+	gstpar->rcv_num = 0;
+	gstpar->send_num = 0;
+	gstpar->frmr_flag = 0;
+	gstpar->disc = 1;
+	gstpar->isUIWaiting = 0;
+	gstpar->canUISend = 0;
+}
+
+int HdlcSetParam(u_char *paramstr, u_int len)
+{
+	return 0;
 }
