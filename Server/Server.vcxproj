@@ -103,6 +103,7 @@
     <None Include="res\Server.rc2" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ApplInterface.h" />
     <ClInclude Include="eventhandler.h" />
     <ClInclude Include="framedef.h" />
     <ClInclude Include="hdlcFSM.h" />
@@ -115,6 +116,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ApplInterface.cpp" />
     <ClCompile Include="checksum.cpp" />
     <ClCompile Include="eventhandler.cpp" />
     <ClCompile Include="fsmswitch.cpp" />

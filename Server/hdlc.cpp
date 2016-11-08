@@ -320,6 +320,7 @@ void HdlcParamInit(){
 	gstpar->disc = 1;
 	gstpar->isUIWaiting = 0;
 	gstpar->canUISend = 0;
+	gstpar->isTransFinish = 1;
 }
 
 int HdlcSetParam(u_char *paramstr, u_int len)

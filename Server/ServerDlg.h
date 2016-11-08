@@ -8,6 +8,8 @@
 
 #define WM_INFO WM_USER+8
 #define WM_REPORTEVENT WM_USER+9
+#define WM_APPLMSG WM_USER+3
+#define WM_APPLGETDATA WM_USER+3
 // CServerDlg ¶Ô»°¿ò
 class CServerDlg : public CDialogEx
 {
@@ -60,4 +62,9 @@ public:
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 protected:
 	afx_msg LRESULT OnReportEvent(WPARAM wParam, LPARAM lParam);
+public:
+	CString m_recdata;
+protected:
+	afx_msg LRESULT OnApplmsg(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnApplgetdata(WPARAM wParam, LPARAM lParam);
 };

@@ -24,6 +24,7 @@ int FSMinit()
 
 int FSMreturn(void)
 {
+	assert(0);
 	if (fsmstack != NULL)
 	{
 		if (fsmstack->next == NULL && fsmstack->prev == NULL)
@@ -46,7 +47,7 @@ int FSMreturn(void)
 	return 0;
 }
 
-int FSMenter(u_int fsmtype)
+int FSMenter2(u_int fsmtype)
 {
 	HdlcTcb *tcb = new HdlcTcb();
 	tcb->fsmtype = fsmtype;
@@ -68,6 +69,33 @@ int FSMenter(u_int fsmtype)
 		fsmstack->prev = NULL;
 	}
 	return 0;
+}
+
+int FSMenter(u_int fsmtype)
+{
+	HdlcTcb *tcb = new HdlcTcb();
+	tcb->fsmtype = fsmtype;
+	tcb->listhandler = StateHandlers[fsmtype];
+	tcb->curstate = 0;
+	tcb->prev = NULL;
+	tcb->next = NULL;
+	if (fsmstack != NULL  )
+	{
+		if (fsmstack->prev != NULL)
+		{
+			delete fsmstack->prev;
+			fsmstack->prev = NULL;
+			fsmstack->next = tcb;
+			tcb->prev = fsmstack;
+			fsmstack = tcb;
+		}
+		else
+		{
+			fsmstack->next = tcb;
+			tcb->prev = fsmstack;
+			fsmstack = tcb;
+		}
+	}
 }
 
 int FSMclean(HdlcTcb *tcb)

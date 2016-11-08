@@ -143,7 +143,7 @@ int makeDISC(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);
 int makeDM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);
 int makeFRMR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen);
 int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int len);
-
+int makeI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen, u_int seg, u_int pf, u_char rcv = 0, u_char snd = 0);
 u_int GetTypes(hdlc &frame);
 
 

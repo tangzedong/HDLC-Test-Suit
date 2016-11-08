@@ -298,15 +298,15 @@ int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *settingda
 	return 0;
 }
 
-int makeI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen, u_int seg, u_int pf)
+int makeI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen, u_int seg, u_int pf, u_char rcv = 0, u_char snd = 0)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
 	outframe->f_format.frame_type = FFORMTYPE;
 	outframe->f_format.frame_seg = seg;
 	outframe->frame_ctl = TYPEI;
-	outframe->nr = 0;
-	outframe->ns = 0;
+	outframe->nr = rcv;
+	outframe->ns = snd;
 	outframe->pollfin = pf;
 	outframe->infolen = infolen;
 	outframe->dst_addr = frame->src_addr;

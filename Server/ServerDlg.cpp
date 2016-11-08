@@ -57,6 +57,7 @@ protected:
 protected:
 	DECLARE_MESSAGE_MAP()
 	afx_msg LRESULT OnInfo(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnApplmsg(WPARAM wParam, LPARAM lParam);
 };
 
 CAboutDlg::CAboutDlg() : CDialogEx(CAboutDlg::IDD)
@@ -70,6 +71,7 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
 	ON_MESSAGE(WM_INFO, &CAboutDlg::OnInfo)
+	ON_MESSAGE(WM_APPLMSG, &CAboutDlg::OnApplmsg)
 END_MESSAGE_MAP()
 
 
@@ -80,6 +82,7 @@ END_MESSAGE_MAP()
 
 CServerDlg::CServerDlg(CWnd* pParent /*=NULL*/) //
 	: CDialogEx(CServerDlg::IDD, pParent)
+	, m_recdata(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	m_strServerName = _T("");
@@ -99,6 +102,7 @@ void CServerDlg::DoDataExchange(CDataExchange* pDX)
 	//  DDX_Control(pDX, IDC_LIST1, IDC_LIST_STATEINFO);
 	//  DDX_Control(pDX, IDC_LIST_STATEINFO, m_liststateinfo);
 	DDX_Control(pDX, IDC_LIST_STATEINFO, m_liststateinfo);
+	DDX_Text(pDX, IDC_EDIT1, m_recdata);
 }
 
 BEGIN_MESSAGE_MAP(CServerDlg, CDialogEx)
@@ -113,6 +117,8 @@ BEGIN_MESSAGE_MAP(CServerDlg, CDialogEx)
 //	ON_REGISTERED_MESSAGE(WM_TEST, &CServerDlg::OnTest)
 ON_WM_TIMER()
 ON_MESSAGE(WM_REPORTEVENT, &CServerDlg::OnReportEvent)
+ON_MESSAGE(WM_APPLMSG, &CServerDlg::OnApplmsg)
+ON_MESSAGE(WM_APPLGETDATA, &CServerDlg::OnApplgetdata)
 END_MESSAGE_MAP()
 
 
@@ -453,10 +459,14 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	u_int i_length = hdlc_p->infolen;
 	gstpar->frame_p_f = hdlc_p->pollfin;
 
-	GETHANDLER(fsmstack->curstate)(gstpar, hdlc_p, &outframe);
+	
+	do{
+		gstpar->isTransFinish = 1;
+		GETHANDLER(fsmstack->curstate)(gstpar, hdlc_p, &outframe);
+	} while (!gstpar->isTransFinish);
 
 
-	if (gstpar->canUISend == 1 && gstpar->canUISend == 1)
+	if (gstpar->isUIWaiting == 1 && gstpar->canUISend == 1)
 	{
 		_TCHAR  sendStr[1024];
 		u_char sendData[255];
@@ -578,5 +588,35 @@ afx_msg LRESULT CServerDlg::OnReportEvent(WPARAM wParam, LPARAM lParam)
 		gUIInfoBuf[i] = data[i];
 	}
 	gstpar->isUIWaiting = 1;
+	return 0;
+}
+
+
+afx_msg LRESULT CAboutDlg::OnApplmsg(WPARAM wParam, LPARAM lParam)
+{
+
+	return 0;
+}
+
+
+afx_msg LRESULT CServerDlg::OnApplmsg(WPARAM wParam, LPARAM lParam)
+{
+	u_char *data = (u_char*)wParam;
+	m_recdata = data;
+	UpdateData(false);
+	return 0;
+}
+
+
+afx_msg LRESULT CServerDlg::OnApplgetdata(WPARAM wParam, LPARAM lParam)
+{
+	u_char *pdata = (u_char *)wParam;
+	u_int *plen = (u_int*)lParam;
+	u_char data[] = "CAIDLKJFLDKJFLJDLKJFLJDLKFJLSDJLFD";
+	*plen = sizeof(data) / sizeof(u_char);
+	for (int i = 0; i < *plen; i++)
+	{
+		pdata[i] = data[i];
+	}
 	return 0;
 }
