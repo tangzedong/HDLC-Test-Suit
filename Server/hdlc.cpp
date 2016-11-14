@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "framedef.h"
-
+#include <Windows.h>
 u_char settingdata[23] = { 0x81, 0x80, 0x14, 0x05, 0x02, 0x00, 0x80, 0x06, 0x02, 0x00,
 0x80, 0x07, 0x04, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0x01 };
 int glen=3;
@@ -61,9 +61,12 @@ int convHexFrame(u_char *pData, hdlc *hdlc_p)
 	}
 	else if (((*pfront & 1) == 0) && (*(pfront+1) & 1) == 1)
 	{
+		hdlc_p->dst_addr = 0;
 		d_addr_length = 2;
 		hdlc_p->dst_addrlen = d_addr_length;
-		hdlc_p->dst_addr = u_short(*((u_short*)pfront) >> 9 | (*((u_short*)pfront) >> 1) << 7);//强制类型转换成小端
+		u_short tempa = (*(u_short*)pfront);
+		hdlc_p->dst_addr = *((u_short*)pfront) >> 9; //强制类型转换成小端
+		hdlc_p->dst_addr += ((*((u_short*)pfront)&0xFF) >> 1) << 7;
 		pfront += 2;
 	}
 	else if (((*pfront & 1) == 0) && ((*(pfront+1) & 1) == 0) && ((*(pfront+2) & 1) == 0) && ((*(pfront+3) & 1) == 1))
@@ -91,7 +94,8 @@ int convHexFrame(u_char *pData, hdlc *hdlc_p)
 	{
 		s_addr_length = 2;
 		hdlc_p->src_addrlen = s_addr_length;
-		hdlc_p->src_addr = u_short(*((u_short*)pfront) >> 9 | (*((u_short*)pfront) >> 1) << 7);//强制类型转换成小端
+		hdlc_p->src_addr = (*((u_short*)pfront) >> 9);//强制类型转换成小端
+		hdlc_p->src_addr += ((*((u_short*)pfront) & 0xFF) >> 1) << 7;
 		pfront += 2;
 	}
 	else if (((*pfront & 1) == 0) && ((*(pfront + 1) & 1) == 0) && ((*(pfront + 2) & 1) == 0) && ((*(pfront + 3) & 1) == 1))
@@ -323,7 +327,153 @@ void HdlcParamInit(){
 	gstpar->isTransFinish = 1;
 }
 
+int HdlcTransParamInit(HdlcStationParam *stpar)
+{
+	stpar->max_rcv_info_size = 0x80;
+	stpar->rcvwindowsize = 1;
+
+	stpar->max_snd_info_size = 0x80;
+	stpar->sendwindowsize = 3;
+	return 0;
+}
+int byteparser(u_char *paramdata, u_int getlen, u_int len, u_int *pres)
+{
+	static u_int seek = 0;
+	u_int num;
+	int error=0;
+	u_int res = 0;
+	for (int i = 0; i < getlen; i++)
+	{
+		if (seek + i+1 > len)
+		{
+			error = -1;
+			break;
+		}
+		num = paramdata[seek + i];
+		num = num << ((getlen - i - 1)*8);
+		res = res + num;
+	}
+	if (error == -1)
+	{
+		res = 0;
+	}
+	else
+	{
+		seek += getlen;
+	}
+	*pres = res;
+	return error;
+}
+hdlcparam *paramparser(u_char *paramstr, u_int len)
+{
+	u_char ch;
+	u_char hexstr[2];
+	u_int i = 0, j = 0;
+	u_int hex;
+	hdlcparam *paramlist = NULL;
+	hdlcparam *param;
+	int res = byteparser(paramstr, 2, len, &hex);
+	if (res == -1)
+	{
+		return NULL;
+	}
+	if (hex!=0x8180)
+	{
+		return NULL;
+	}
+	res = byteparser(paramstr, 1, len, &hex);
+	if (res == -1)
+	{
+		return NULL;
+	}
+	int paramstrlen = hex;
+
+	u_int arg, value;
+	while (1)
+	{
+		
+		res = byteparser(paramstr, 1, len, &arg);
+		if (res == -1)
+		{
+			break;
+		}
+
+		
+
+		res = byteparser(paramstr, 1, len, &hex);
+		if (res == -1)
+		{
+			break;
+		}
+
+		res = byteparser(paramstr, hex, len, &value);
+		if (res == -1)
+		{
+			break;
+		}
+		param = new hdlcparam();
+		param->arg = arg;
+		param->value = value;
+		if (paramlist == NULL)
+		{
+			paramlist = param;
+			paramlist->next = NULL;
+		}
+		else
+		{
+			paramlist->next = param;
+			param->next = NULL;
+		}
+	}
+	return paramlist;
+}
 int HdlcSetParam(u_char *paramstr, u_int len)
 {
+	hdlcparam *paramlist = paramparser(paramstr, len);
+	hdlcparam *pParam;
+	u_int argval;
+	pParam = paramlist;
+	while (pParam)
+	{
+		switch (pParam->arg)
+		{
+		case ARG_MAX_SND_SIZE:
+			argval = pParam->value;
+			gstpar->max_snd_info_size = argval <= MAX_SNDINFO_SIZE ? argval : MAX_SNDINFO_SIZE;
+			settingdata[ARG_SNDINFO_INDEX] = (argval & 0xFF00) >> 8;
+			settingdata[ARG_SNDINFO_INDEX + 1] = (argval & 0xFF);
+			break;
+		case ARG_SND_WIN_SIZE:
+			argval = pParam->value;
+			gstpar->sendwindowsize = argval <= MAX_SEND_WINDOW_SIZE ? argval : MAX_SEND_WINDOW_SIZE;
+			settingdata[ARG_SNDWINSIZE_INDEX] = (argval & 0xFF000000) >> 24;
+			settingdata[ARG_SNDWINSIZE_INDEX + 1] = (argval & 0xFF0000) >> 16;
+			settingdata[ARG_SNDWINSIZE_INDEX + 2] = (argval & 0xFF00) >> 8;
+			settingdata[ARG_SNDWINSIZE_INDEX + 1] = (argval & 0xFF);
+			break;
+		case ARG_MAX_RCV_SIZE:
+			argval = pParam->value;
+			gstpar->max_rcv_info_size = argval <= MAX_RCVINFO_SIZE ? argval : MAX_RCVINFO_SIZE;;
+			settingdata[ARG_RCVINFO_INDEX] = (argval & 0xFF00) >> 8;
+			settingdata[ARG_RCVINFO_INDEX + 1] = (argval & 0xFF);
+			break;
+		case ARG_RCV_WIN_SIZE:
+			argval = pParam->value;
+			gstpar->rcvwindowsize  = argval <= MAX_RCV_WINDOW_SIZE ? argval : MAX_RCV_WINDOW_SIZE;;
+			settingdata[ARG_RCVWINSIZE_INDEX] = (argval & 0xFF000000) >> 24;
+			settingdata[ARG_RCVWINSIZE_INDEX + 1] = (argval & 0xFF0000) >> 16;
+			settingdata[ARG_RCVWINSIZE_INDEX + 2] = (argval & 0xFF00) >> 8;
+			settingdata[ARG_RCVWINSIZE_INDEX + 1] = (argval & 0xFF);
+			break;
+		}
+		pParam = pParam->next;
+	}
+	pParam = paramlist;
+	while(paramlist)
+	{
+		paramlist = pParam->next;
+		delete pParam;
+		pParam = paramlist;
+	}
 	return 0;
 }

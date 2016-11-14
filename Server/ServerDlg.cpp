@@ -10,6 +10,7 @@
 #include "framedef.h"
 #include "hdlcFSM.h"
 #include "eventhandler.h"
+#include "ApplInterface.h"
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -58,6 +59,8 @@ protected:
 	DECLARE_MESSAGE_MAP()
 	afx_msg LRESULT OnInfo(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnApplmsg(WPARAM wParam, LPARAM lParam);
+//	afx_msg LRESULT OnWriteToFiel(WPARAM wParam, LPARAM lParam);
+//	afx_msg LRESULT OnSendLog(WPARAM wParam, LPARAM lParam);
 };
 
 CAboutDlg::CAboutDlg() : CDialogEx(CAboutDlg::IDD)
@@ -70,8 +73,6 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 }
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
-	ON_MESSAGE(WM_INFO, &CAboutDlg::OnInfo)
-	ON_MESSAGE(WM_APPLMSG, &CAboutDlg::OnApplmsg)
 END_MESSAGE_MAP()
 
 
@@ -114,11 +115,13 @@ BEGIN_MESSAGE_MAP(CServerDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_CLOSELISTEN, &CServerDlg::OnClickedButtonCloselisten)
 	ON_BN_CLICKED(IDC_BUTTON_SEND, &CServerDlg::OnClickedButtonSend)
 	ON_MESSAGE(WM_INFO, &CServerDlg::OnInfo)
-//	ON_REGISTERED_MESSAGE(WM_TEST, &CServerDlg::OnTest)
-ON_WM_TIMER()
-ON_MESSAGE(WM_REPORTEVENT, &CServerDlg::OnReportEvent)
-ON_MESSAGE(WM_APPLMSG, &CServerDlg::OnApplmsg)
-ON_MESSAGE(WM_APPLGETDATA, &CServerDlg::OnApplgetdata)
+	//	ON_REGISTERED_MESSAGE(WM_TEST, &CServerDlg::OnTest)
+	ON_WM_TIMER()
+	ON_MESSAGE(WM_REPORTEVENT, &CServerDlg::OnReportEvent)
+	ON_MESSAGE(WM_APPLMSG, &CServerDlg::OnApplmsg)
+	ON_MESSAGE(WM_APPLGETDATA, &CServerDlg::OnApplgetdata)
+	ON_MESSAGE(WM_WRITETOFILE, &CServerDlg::OnWriteToFile)
+	ON_MESSAGE(WM_SENDLOG, &CServerDlg::OnSendLog)
 END_MESSAGE_MAP()
 
 
@@ -182,7 +185,7 @@ BOOL CServerDlg::OnInitDialog()
 
 	gstpar = &_stpar;
 	HdlcParamInit();
-	
+	HdlcTransParamInit(gstpar);
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -296,6 +299,9 @@ void CServerDlg::OnClickedButtonSend()
 
 void CServerDlg::onClose(void)
 {
+	HdlcParamInit();
+	HdlcTransParamInit(gstpar);
+	FSMinit();
 	m_listReceived.AddString(CString("服务器收到了onClose消息"));
 	m_sClientSocket.Close();
 	m_sServerSocket.Close();   //Close()函数执行后会触发OnClose()函数
@@ -349,10 +355,10 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 
 	//-----------------------------------------------------------将结构体赋值----------------------------------------------------------------------
 
-	FSMenter(FSMTypePrehandleFrame);
+	//FSMenter(FSMTypePrehandleFrame);
 	u_int res = convHexFrame(str, hdlc_p);
-	FSMreturn();
-	
+	//FSMreturn();
+
 	//-----------------------------------------------------------错误处理--------------------------------------------------------------------------
 	switch (res)
 	{
@@ -371,7 +377,7 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	}
 	if (res == ERROR_INF_OVERFLOW)//信息域超长
 	{
-		u_char data[255] = {0x10, 0x00, 0x20};
+		u_char data[255] = { 0x10, 0x00, 0x20 };
 		m_strToServer = " 7E A0 0D 21 02 23 97 04 C4 10 00 20 E0 6B 7E";
 		nSentLen = m_sClientSocket.Send(m_strToServer, 100);
 		if (nSentLen != SOCKET_ERROR)
@@ -422,11 +428,11 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 		break;
 	default:
 		m_liststateinfo.AddString(_T("frmr:控制域类型错误或源地址长度超过1字节！"));
-		gstpar->frmr_flag = 1;
-		return;
+		//gstpar->frmr_flag = 1;
+		//return;
 	}
 
-	
+
 	//进行HCS校验-----------------------计算h_cs_cal
 	h_cs_val = h_cs_cal(str, hdlc_p->dst_addrlen);
 	if (hdlc_p->h_cs != h_cs_val)
@@ -459,52 +465,55 @@ void CServerDlg::onReceive(void)//如果OnReceive()函数执行成功会转来执行onReceive
 	u_int i_length = hdlc_p->infolen;
 	gstpar->frame_p_f = hdlc_p->pollfin;
 
-	
+
 	do{
 		gstpar->isTransFinish = 1;
 		GETHANDLER(fsmstack->curstate)(gstpar, hdlc_p, &outframe);
+
+
+		if (gstpar->isUIWaiting == 1 && gstpar->canUISend == 1)
+		{
+			_TCHAR  sendStr[1024];
+			u_char sendData[255];
+			convFrameHex(&gUIFrame, write_str);
+			convFrameStr(&gUIFrame, sendStr);
+			CString m_strToServer = sendStr;
+			writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
+			nSentLen = m_sClientSocket.Send(m_strToServer, 1024);
+			if (nSentLen != SOCKET_ERROR)
+			{
+				//发送成功
+				m_listSent.AddString(_T("发送UI帧"));
+				m_listSent.AddString(m_strToServer);
+			}
+			gstpar->canUISend = 0;
+			gstpar->isUIWaiting = 0;
+		}
+
+		if (gstpar->send_flag == 1)
+		{
+			_TCHAR  sendStr[1024];
+			u_char sendData[255];
+			convFrameHex(&outframe, write_str);
+			convFrameStr(&outframe, sendStr);
+			CString m_strToServer = sendStr;
+			writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
+			nSentLen = m_sClientSocket.Send(m_strToServer, 1024);
+			if (nSentLen != SOCKET_ERROR)
+			{
+				//发送成功
+				m_listSent.AddString(m_strToServer);
+			}
+			gstpar->send_flag = 0;
+		}
+
 	} while (!gstpar->isTransFinish);
-
-
-	if (gstpar->isUIWaiting == 1 && gstpar->canUISend == 1)
-	{
-		_TCHAR  sendStr[1024];
-		u_char sendData[255];
-		convFrameHex(&gUIFrame, write_str);
-		convFrameStr(&gUIFrame, sendStr);
-		CString m_strToServer = sendStr;
-		writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
-		nSentLen = m_sClientSocket.Send(m_strToServer, 1024);
-		if (nSentLen != SOCKET_ERROR)
-		{
-			//发送成功
-			m_listSent.AddString(_T("发送UI帧"));
-			m_listSent.AddString(m_strToServer);
-		}
-		gstpar->canUISend = 0;
-		gstpar->isUIWaiting = 0;
-	}
-
-	if (gstpar->send_flag == 1)
-	{
-		_TCHAR  sendStr[1024];
-		u_char sendData[255];
-		convFrameHex(&outframe, write_str);
-		convFrameStr(&outframe, sendStr);
-		CString m_strToServer = sendStr;
-		writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
-		nSentLen = m_sClientSocket.Send(m_strToServer, 1024);
-		if (nSentLen != SOCKET_ERROR)
-		{
-			//发送成功
-			m_listSent.AddString(m_strToServer);
-		}
-	}
-
 
 	UpdateData(FALSE);
 
+#ifndef _DEBUG
 	!gstpar->disc && SetTimer(1, 10000, NULL);
+#endif
 
 	return;
 }
@@ -604,6 +613,8 @@ afx_msg LRESULT CServerDlg::OnApplmsg(WPARAM wParam, LPARAM lParam)
 	u_char *data = (u_char*)wParam;
 	m_recdata = data;
 	UpdateData(false);
+	u_char snddata[] = "DFkkdflsdfdllllllllllllhhhhhhhhhflsdj";
+	ApplHdlcSend(gstpar, snddata, sizeof(snddata)/sizeof(u_char));
 	return 0;
 }
 
@@ -618,5 +629,37 @@ afx_msg LRESULT CServerDlg::OnApplgetdata(WPARAM wParam, LPARAM lParam)
 	{
 		pdata[i] = data[i];
 	}
+	return 0;
+}
+
+
+//afx_msg LRESULT CAboutDlg::OnWriteToFiel(WPARAM wParam, LPARAM lParam)
+//{
+//	return 0;
+//}
+
+
+//afx_msg LRESULT CAboutDlg::OnSendLog(WPARAM wParam, LPARAM lParam)
+//{
+//	return 0;
+//}
+
+
+afx_msg LRESULT CServerDlg::OnWriteToFile(WPARAM wParam, LPARAM lParam)
+{
+	u_char *data = (u_char*)wParam;
+	writetxt((FILE*)wc, data, (u_int)lParam);
+	delete data;
+	data = NULL;
+	return 0;
+}
+
+
+afx_msg LRESULT CServerDlg::OnSendLog(WPARAM wParam, LPARAM lParam)
+{
+	CString *strlog = (CString*)wParam;
+	m_listSent.AddString(*strlog);
+	delete strlog;
+	strlog = NULL;
 	return 0;
 }

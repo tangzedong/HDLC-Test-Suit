@@ -19,14 +19,16 @@ statehandler PrehandleStateHandler[] = {
 
 statehandler NRMStateHandler[] = {
 	_HANDLER(hdlcStateNRMIdle),
+	_HANDLER(hdlcStateNRMIR),
 	_HANDLER(hdlcStateNRMHandle2),
-	_HANDLER(hdlcStateNRMIR)
+	
 };
 
 statehandler IRStateHandler[] = {
 	_HANDLER(hdlcStateIRWaitCmd),
 	_HANDLER(hdlcStateIRWaitRes),
-	_HANDLER(hdlcStateIRHandle3)
+	_HANDLER(hdlcStateIRHandle3),
+	_HANDLER(hdlcStateIRSendData)
 };
 statehandler *StateHandlers[] = { PrimaryStateHandler, PrehandleStateHandler, NRMStateHandler, IRStateHandler };
 //-----------------------------------Primary FSM---------------------------------------------------------------
@@ -45,7 +47,7 @@ DEFHANDLER(hdlcStateNDM)
 			{
 				fsmstack->curstate = STATE_WAIT_CONNECT;
 				stpar->isTransFinish = 0;
-				HdlcSetParam(frame->info_buff, frame->infolen);
+				//HdlcSetParam(frame->info_buff, frame->infolen);
 				//GETHANDLER(STATE_WAIT_CONNECT)(stpar, frame, outframe);
 			}
 			
@@ -117,11 +119,16 @@ DEFHANDLER(hdlcStateWCN)
 			}
 			if (ApplId()==OK)
 			{
-				makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
+				
 				fsmstack->curstate = STATE_NRM;              //转移到NRM状态
 				stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("已经处于NRM状态！"), NULL);
+				stpar->slav_pot_addrlen = frame->dst_addrlen;
+				stpar->slav_pot_addr = frame->dst_addr;
+				stpar->main_pot_addrlen = frame->src_addrlen;
+				stpar->main_pot_addr = frame->src_addr;
 				stpar->disc = 0;
 				stpar->isTransFinish = 0;
+				makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
 			}
 			else if (ApplId() == DENY)
 			{
@@ -135,16 +142,17 @@ DEFHANDLER(hdlcStateWCN)
 				stpar->isTransFinish = 1;
 			}
 		}
-		if (GetTypes(*frame) == TYPEDISC)     //帧类型为DISC！
+		else if (GetTypes(*frame) == TYPEDISC)     //帧类型为DISC！
 		{
 			//上层默认result 为OK 
 			//make UA
 			//DOHANDLER(WAITDIS, DISC)(&stpar, hdlc_p, &outframe);
 			//通过send()函数发送响应
-			makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
+			
 			fsmstack->curstate = STATE_NDM;
 			//回UA，状态转移到NDM
 			stpar->isTransFinish = 0;
+			makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
 		}
 		else
 		{
@@ -186,9 +194,10 @@ DEFHANDLER(hdlcStateWDC)
 			//make UA
 			//DOHANDLER(WAITDIS, DISC)(&stpar, hdlc_p, &outframe);
 			//通过send()函数发送响应
-			makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
+			
 			fsmstack->curstate = STATE_NDM;
 			stpar->disc = 1;
+			makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
 		}
 	}
 	else
@@ -210,8 +219,9 @@ DEFHANDLER(hdlcStateFRMR)
 		stpar->frmr_flag = 1;
 		stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("frmr:expected snrm to resume connect！"), NULL);
 		fsmstack->curstate = STATE_FRMR;
-		makeFRMR(stpar, frame, outframe, errorcode, glen);
+		
 		stpar->isTransFinish = 1;
+		makeFRMR(stpar, frame, outframe, errorcode, glen);
 	}
 	return 0;
 }
@@ -227,22 +237,23 @@ DEFHANDLER(hdlcStateNRMIdle)
 			//doNRM_SNRM();
 			//make UA
 			//DOHANDLER(NRM, SNRM)(&stpar, hdlc_p, &outframe);
-			makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
-			stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("已经处于连接状态！"), NULL);
+			//makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
+			stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("已经处于NRM子状态机！"), NULL);
 		}
 		else if (GetTypes(*frame) == TYPEDISC)     //帧类型为DISC！
 		{
 			FSMenter(FSMTypePrimary);
 			fsmstack->curstate = STATE_WAIT_DISCONNECT;
-			stpar->isTransFinish = 1;
+			stpar->isTransFinish = 0;
 			//GETHANDLER(STATE_WAIT_DISCONNECT)(stpar, frame, outframe);
 		}
 		else if (GetTypes(*frame) == TYPERR)//帧类型为RR！
 		{
 			if (stpar->isUIWaiting)
 			{
-				makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
+				
 				gstpar->canUISend = 1;
+				makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
 			}
 			//DOHANDLER(NRM, RR)(&stpar, hdlc_p, &outframe);
 			//通过send()函数发送响应
@@ -328,16 +339,39 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 			stpar->isTransFinish = 0;
 			stpar->isSendData = 1;
 		}
-		else if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 && stpar->windowsize == 1)//保证是完整的一帧  FRAME_type 为I_COMPLETE，整个帧F=1, S=0
-		{
-			if (stpar->isUIWaiting)//UI发送时机1 I_COMPLETE 发送之前
-			{
-				makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
-				gstpar->canUISend = 1;
-			}
-			makeRR(stpar, frame, outframe, stpar->rcv_num, stpar->frame_p_f);
-		}
-		else if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 && stpar->windowsize > 1)//分段的最后一帧，由m控制F=1, S=0
+		//else if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 && stpar->windowsize == 1)//保证是完整的一帧  FRAME_type 为I_COMPLETE，整个帧F=1, S=0
+		//{
+		//	if (stpar->isUIWaiting)//UI发送时机1 I_COMPLETE 发送之前
+		//	{
+		//		makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
+		//		gstpar->canUISend = 1;
+		//	}
+		//	//makeRR(stpar, frame, outframe, stpar->rcv_num, stpar->frame_p_f);
+		//	for (u_int n = 0; n < frame->infolen; n++)
+		//	{
+		//		stpar->save_inf[stpar->m] = frame->info_buff[n];
+		//		stpar->m++;
+		//	}
+
+
+		//	u_char s_rcv = frame->ns + 1;
+		//	u_char s_send = frame->nr;
+		//	stpar->rcv_num++;
+		//	stpar->rcv_num = stpar->rcv_num % 8;
+		//	//	u_char data[] = { 0xE6, 0xE7, 0x00, 0x61, 0x1F, 0xA1, 0x09, 0x06, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08,
+		//	//	0x01, 0x01, 0xA2, 0x03, 0x02, 0x01, 0x01, 0xA3, 0x05, 0xA1, 0x03, 0x02, 0x01, 0x0D, 0xBE,
+		//	//	0x06, 0x04, 0x04, 0x0E, 0x01, 0x06, 0x01};
+		//	//makeI(stpar, frame, outframe, data, sizeof(data)/sizeof(u_char), 0, 1, s_rcv, s_send);
+
+		//	ApplSend(stpar->save_inf, stpar->m);
+		//	stpar->m = 0;
+
+		//	fsmstack->curstate = STATE_WAIT_RES;
+		//	stpar->isTransFinish = 0;
+		//	stpar->isSendData = 1;
+		//}
+		//分段的最后一帧，由m控制F=1, S=0, FRAME_type 为I_COMPLETE, I_FINISH&& stpar->windowsize > 1
+		else if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 )
 		{
 			if (stpar->isUIWaiting)//UI发送时机2 每段最后一帧发送之前
 			{
@@ -363,12 +397,12 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 			//	0x06, 0x04, 0x04, 0x0E, 0x01, 0x06, 0x01};
 			//makeI(stpar, frame, outframe, data, sizeof(data)/sizeof(u_char), 0, 1, s_rcv, s_send);
 			
-			ApplSend(stpar->save_inf, stpar->m);
+			ApplSend(frame, stpar->save_inf, stpar->m);
 			stpar->m = 0;
 
-			fsmstack->curstate = STATE_WAIT_RES;
-			stpar->isTransFinish = 0;
-			stpar->isSendData = 1;
+			//fsmstack->curstate = STATE_WAIT_RES;
+			//stpar->isTransFinish = 0;
+			//stpar->isSendData = 1;
 		}
 		else if (frame->f_format.frame_seg == 1 && frame->pollfin == 0)//每一波分帧的一部分F=0, S=1
 		{
@@ -399,21 +433,27 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 	return 0;
 }
 
-DEFHANDLER(hdlcStateIRWaitRes)
+DEFHANDLER(hdlcStateIRWaitRes) //等待Appl消息
 {
 	u_int len;
 	u_char *buf;
 	u_int nwin, tail;
-	if (ApplGetBuf(&buf, &len) != READY)
+	/*if (ApplGetBuf(&buf, &len) != READY)
 	{
 		return 0;
-	}
-	stpar->sendbuf = buf;
-	stpar->sendlen = len;
+	}*/
+	buf = stpar->sendbuf;
+	len = stpar->sendlen;
 	stpar->seglen = nwin = len / stpar->max_rcv_info_size;
 	stpar->segtail = len % stpar->max_rcv_info_size;
+	if (stpar->segtail != 0)
+	{
+		stpar->seglen = stpar->seglen + 1;
+	}
 	fsmstack->curstate = STATE_SEND_DATA;
 	stpar->isTransFinish = 0;
+	stpar->m = 0;
+	stpar->numSegHaveSend = 0;
 	return 0;
 }
 
@@ -423,8 +463,11 @@ DEFHANDLER(hdlcStateIRSendData)
 	u_int m = stpar->m;
 	int i = 0, j = 0;
 	u_char seg, pf;
-	for (i = 0; i < stpar->windowsize; i++)
-	{
+	u_char data[2048];
+
+	u_int numSegHaveSend = stpar->numSegHaveSend;
+	u_int windowsize = stpar->rcvwindowsize;
+	//do{
 		while (m < stpar->sendlen && j < stpar->max_rcv_info_size)
 		{
 			data[j++] = send_buf[m++];
@@ -434,25 +477,35 @@ DEFHANDLER(hdlcStateIRSendData)
 		{
 			seg = 0; pf = 1;
 		}
-		else if (m < stpar->sendlen && i < stpar->windowsize)
+		else if (m < stpar->sendlen &&  numSegHaveSend != stpar->rcvwindowsize - 1)
 		{
 			seg = 1; pf = 0;
 		}
-		else if (m < stpar->sendlen && i == stpar->windowsize - 1)
+		else if (m < stpar->sendlen && numSegHaveSend == stpar->rcvwindowsize - 1)
 		{
 			seg = 1; pf = 1;
 		}
 		stpar->send_num++;
 		stpar->send_num = stpar->send_num % 8;
-		makeI(stpar, frame, outframe, send_buf, j, seg, pf, stpar->rcv_num, stpar->send_num);
-	}
-	fsmstack->curstate = STATE_WAIT_CMD;
-
-	if (m == stpar->sendlen)
+		makeI(stpar, frame, outframe, data, j, seg, pf, stpar->rcv_num, stpar->send_num);
+		stpar->send_flag = 1;
+		numSegHaveSend++;
+	stpar->numSegHaveSend = numSegHaveSend;
+	stpar->m = m;
+	//} while (numSegHaveSend % windowsize != 0 && numSegHaveSend < stpar->seglen);
+		if (numSegHaveSend % windowsize == 0 && numSegHaveSend < stpar->seglen)
+		{
+			fsmstack->curstate = STATE_WAIT_CMD;
+		}
+		else if (m == stpar->sendlen)
 	{
 		FSMenter(FSMTypeNRM);
 		fsmstack->curstate = STATE_NRM_IDLE;
 	}
+		else
+		{
+			stpar->isTransFinish = 0;
+		}
 	return 0;
 }
 

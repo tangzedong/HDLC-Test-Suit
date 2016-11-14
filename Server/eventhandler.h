@@ -18,29 +18,20 @@ statehandler NRMStateHandler[];
 statehandler IRStateHandler[];
 statehandler *StateHandlers[];
 //×´Ì¬´¦Àíº¯Êý
-//DEFHANDLER(hdlcStateNDM);
-//DEFHANDLER(hdlcStateWCN);
-//DEFHANDLER(hdlcStateNRM);
-//DEFHANDLER(hdlcStateWDC);
 
 int HhdlcStateNDM(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateWCN(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateNRM(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateWDC(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateFRMR(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
-//DEFHANDLER(hdlcStateNRMIdle),
-//DEFHANDLER(hdlcStateNRMHandle2),
-//DEFHANDLER(hdlcStateNRMIR)
 
 int HhdlcStateNRMIdle(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateNRMHandle2(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateNRMIR(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 
-//_HANDLER(hdlcStateIRWaitCmd),
-//_HANDLER(hdlcStateIRWaitRes),
-//_HANDLER(hdlcStateIRHandle3)
 
 int HhdlcStateIRWaitCmd(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateIRWaitRes(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 int HhdlcStateIRHandle3(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
+int HhdlcStateIRSendData(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);
 #endif

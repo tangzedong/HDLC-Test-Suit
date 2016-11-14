@@ -8,8 +8,12 @@
 
 #define WM_INFO WM_USER+8
 #define WM_REPORTEVENT WM_USER+9
+#define WM_WRITETOFILE WM_USER+10
+#define WM_SENDLOG WM_USER+11
+
 #define WM_APPLMSG WM_USER+3
-#define WM_APPLGETDATA WM_USER+3
+#define WM_APPLGETDATA WM_USER+4
+
 // CServerDlg ¶Ô»°¿ò
 class CServerDlg : public CDialogEx
 {
@@ -67,4 +71,6 @@ public:
 protected:
 	afx_msg LRESULT OnApplmsg(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnApplgetdata(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnWriteToFile(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnSendLog(WPARAM wParam, LPARAM lParam);
 };

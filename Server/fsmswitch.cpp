@@ -96,6 +96,7 @@ int FSMenter(u_int fsmtype)
 			fsmstack = tcb;
 		}
 	}
+	return 0;
 }
 
 int FSMclean(HdlcTcb *tcb)

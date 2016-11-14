@@ -25,8 +25,8 @@ enum{
 	STATE_WAIT_CONNECT,
 	STATE_NRM,
 	STATE_WAIT_DISCONNECT,
+	STATE_FRMR,
 	STATE_WAIT_FRMR,
-	STATE_FRMR
 };
 
 //States of NRM FSM
@@ -41,10 +41,15 @@ enum{
 	STATE_WAIT_CMD = 0,
 	STATE_WAIT_RES,
 	STATE_HANDLE3,
+	STATE_SEND_DATA,
 };
 
 typedef struct _statparam
 {
+	u_int slav_pot_addr;
+	u_int main_pot_addr;
+	u_char slav_pot_addrlen;
+	u_char main_pot_addrlen;
 	unsigned char started;//值为1进入状态循环
 	unsigned char rcv_num;      //我自己记录的接收序号
 	unsigned char send_num;   //我自己记录的发送序号
@@ -66,12 +71,32 @@ typedef struct _statparam
 	unsigned char frmr;
 
 	unsigned int max_rcv_info_size;
-	unsigned int windowsize;
+#define	MAX_RCVINFO_SIZE 0xf2
+#define ARG_RCVINFO_INDEX 9
+
+	unsigned int rcvwindowsize;
+#define MAX_RCV_WINDOW_SIZE 0xf2
+#define ARG_RCVWINSIZE_INDEX 19
+
+	unsigned int max_snd_info_size;
+#define	MAX_SNDINFO_SIZE 0xf2
+#define ARG_SNDINFO_INDEX 5 
+
+	unsigned int sendwindowsize;
+#define MAX_SEND_WINDOW_SIZE 0xf2
+#define ARG_SNDWINSIZE_INDEX 13
 
 	unsigned char canUISend;
 	unsigned char isUIWaiting;
 
 	unsigned char isTransFinish;
+	unsigned char isSendData;
+
+	unsigned char *sendbuf;
+	unsigned int sendlen;
+	unsigned int seglen;
+	unsigned int segtail;
+	unsigned int numSegHaveSend;
 } HdlcStationParam;
 
 typedef struct _hdlctcb
@@ -101,6 +126,17 @@ typedef struct {
 	INT8U frame_discard_flag:1;    //帧未成功接收标识
 }T_HdlcHandleResult;
 
+typedef struct _hdlcparam
+{
+	INT8U arg;
+#define ARG_MAX_SND_SIZE 0x05
+#define ARG_SND_WIN_SIZE 0x07
+#define ARG_MAX_RCV_SIZE 0x06
+#define ARG_RCV_WIN_SIZE 0x08
+
+	INT16U value;
+	_hdlcparam *next;
+}hdlcparam;
 //FSM栈管理
 int FSMinit();
 int FSMreturn(void);
@@ -108,4 +144,5 @@ int FSMenter(u_int fsmtype);
 int HdlcSetOpt(hdlcpointer frame);
 void HdlcParamInit();
 int HdlcSetParam(u_char* paramstr, u_int len);
+int HdlcTransParamInit(HdlcStationParam *stpar);
 #endif
