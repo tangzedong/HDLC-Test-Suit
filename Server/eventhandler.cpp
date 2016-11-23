@@ -2,8 +2,10 @@
 #include "Server.h"
 #include "ServerDlg.h"
 #include "afxdialogex.h"
-#include "eventhandler.h"
-#include "framedef.h"
+
+#include "hdlc.h"
+#include "hdlcutil.h"
+#include "hdlceventhandler.h"
 #include "ApplInterface.h"
 statehandler PrimaryStateHandler[] = {
 	_HANDLER(hdlcStateNDM),
@@ -34,18 +36,17 @@ statehandler *StateHandlers[] = { PrimaryStateHandler, PrehandleStateHandler, NR
 //-----------------------------------Primary FSM---------------------------------------------------------------
 DEFHANDLER(hdlcStateNDM)
 {
-
 		if (GetTypes(*frame) == TYPESNRM && stpar->started == 1 && stpar->frame_p_f == 1)    //帧类型为SNRM！
 		{
 			if (frame->infolen == 0)
 			{
-				fsmstack->curstate = STATE_WAIT_CONNECT;
+				stpar->fsmstack->curstate = STATE_WAIT_CONNECT;
 				stpar->isTransFinish = 0;
 				//GETHANDLER(STATE_WAIT_CONNECT)(stpar, frame, outframe);
 			}
 			else
 			{
-				fsmstack->curstate = STATE_WAIT_CONNECT;
+				stpar->fsmstack->curstate = STATE_WAIT_CONNECT;
 				stpar->isTransFinish = 0;
 				//HdlcSetParam(frame->info_buff, frame->infolen);
 				//GETHANDLER(STATE_WAIT_CONNECT)(stpar, frame, outframe);
@@ -63,8 +64,8 @@ DEFHANDLER(hdlcStateNDM)
 			{
 				stpar->frmr_flag = 1;
 				stpar->isTransFinish = 0;
-				FSMenter(STATE_FRMR);
-				fsmstack->curstate = STATE_FRMR;
+				stpar->fsmstack = FSMenter(stpar->fsmstack, STATE_FRMR);
+				stpar->fsmstack->curstate = STATE_FRMR;
 				//makeFRMR(stpar, frame, outframe, errorcode, glen);
 				stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("frmr:拒绝包含信息的DISC帧！"), NULL);
 			}
@@ -78,7 +79,7 @@ DEFHANDLER(hdlcStateNDM)
 		//	if (stpar->isUIWaiting)
 		//	{
 		//		makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
-		//		gstpar->canUISend = 1;
+		//		stpar->canUISend = 1;
 		//	}
 		//	if (frame->infolen > 0)
 		//	{
@@ -115,12 +116,12 @@ DEFHANDLER(hdlcStateWCN)
 			if (frame->infolen > 0)    //协商参数！
 			{
 				//默认上层返回result是等于OK									
-				HdlcSetParam(frame->info_buff, frame->infolen);
+				HdlcSetParam(stpar, frame->info_buff, frame->infolen);
 			}
 			if (ApplId()==OK)
 			{
 				
-				fsmstack->curstate = STATE_NRM;              //转移到NRM状态
+				stpar->fsmstack->curstate = STATE_NRM;              //转移到NRM状态
 				stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("已经处于NRM状态！"), NULL);
 				stpar->slav_pot_addrlen = frame->dst_addrlen;
 				stpar->slav_pot_addr = frame->dst_addr;
@@ -128,11 +129,11 @@ DEFHANDLER(hdlcStateWCN)
 				stpar->main_pot_addr = frame->src_addr;
 				stpar->disc = 0;
 				stpar->isTransFinish = 0;
-				makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
+				makeUA(stpar, frame, outframe, stpar->settingdata, gUAdatalen);
 			}
 			else if (ApplId() == DENY)
 			{
-				fsmstack->curstate = STATE_NDM;              //转移到NRM状态
+				stpar->fsmstack->curstate = STATE_NDM;              //转移到NRM状态
 				stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("连接失败！"), NULL);
 				stpar->disc = 1;
 				stpar->isTransFinish = 0;
@@ -149,10 +150,10 @@ DEFHANDLER(hdlcStateWCN)
 			//DOHANDLER(WAITDIS, DISC)(&stpar, hdlc_p, &outframe);
 			//通过send()函数发送响应
 			
-			fsmstack->curstate = STATE_NDM;
+			stpar->fsmstack->curstate = STATE_NDM;
 			//回UA，状态转移到NDM
 			stpar->isTransFinish = 0;
-			makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
+			makeUA(stpar, frame, outframe, stpar->settingdata, gUAdatalen);
 		}
 		else
 		{
@@ -165,7 +166,7 @@ DEFHANDLER(hdlcStateWCN)
 
 DEFHANDLER(hdlcStateNRM)
 {
-	FSMenter(FSMTypeNRM);
+	stpar->fsmstack = FSMenter(stpar->fsmstack, FSMTypeNRM);
 	stpar->isTransFinish = 0;
 	//GETHANDLER(fsmstack->curstate)(stpar, frame, outframe);
 	return 0;
@@ -174,7 +175,6 @@ DEFHANDLER(hdlcStateNRM)
 
 DEFHANDLER(hdlcStateWDC)
 {
-	
 	if (GetTypes(*frame) == TYPESNRM && stpar->started == 1 && stpar->frame_p_f == 1)    //帧类型为SNRM！
 	{
 		stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("warning:不响应！"), NULL);
@@ -183,8 +183,8 @@ DEFHANDLER(hdlcStateWDC)
 	{
 		if (frame->infolen > 0)
 		{
-			FSMenter(FSMTypePrimary);
-			fsmstack->curstate = STATE_FRMR;
+			stpar->fsmstack = FSMenter(stpar->fsmstack, FSMTypePrimary);
+			stpar->fsmstack->curstate = STATE_FRMR;
 			stpar->isTransFinish = 0;
 			//makeFRMR(stpar, frame, outframe, errorcode, glen);
 			stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("frmr:拒绝带信息的DISC帧！"), NULL);
@@ -195,9 +195,9 @@ DEFHANDLER(hdlcStateWDC)
 			//DOHANDLER(WAITDIS, DISC)(&stpar, hdlc_p, &outframe);
 			//通过send()函数发送响应
 			
-			fsmstack->curstate = STATE_NDM;
+			stpar->fsmstack->curstate = STATE_NDM;
 			stpar->disc = 1;
-			makeUA(stpar, frame, outframe, settingdata, gUAdatalen);
+			makeUA(stpar, frame, outframe, stpar->settingdata, gUAdatalen);
 		}
 	}
 	else
@@ -210,7 +210,7 @@ DEFHANDLER(hdlcStateFRMR)
 {
 	if (GetTypes(*frame) == TYPESNRM)    //帧类型为SNRM！
 	{
-		fsmstack->curstate = STATE_NRM;
+		stpar->fsmstack->curstate = STATE_NRM;
 		stpar->isTransFinish = 0;
 		//GETHANDLER(STATE_NRM)(stpar, frame, outframe);
 	}
@@ -218,7 +218,7 @@ DEFHANDLER(hdlcStateFRMR)
 	{
 		stpar->frmr_flag = 1;
 		stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("frmr:expected snrm to resume connect！"), NULL);
-		fsmstack->curstate = STATE_FRMR;
+		stpar->fsmstack->curstate = STATE_FRMR;
 		
 		stpar->isTransFinish = 1;
 		makeFRMR(stpar, frame, outframe, errorcode, glen);
@@ -242,8 +242,8 @@ DEFHANDLER(hdlcStateNRMIdle)
 		}
 		else if (GetTypes(*frame) == TYPEDISC)     //帧类型为DISC！
 		{
-			FSMenter(FSMTypePrimary);
-			fsmstack->curstate = STATE_WAIT_DISCONNECT;
+			stpar->fsmstack = FSMenter(stpar->fsmstack, FSMTypePrimary);
+			stpar->fsmstack->curstate = STATE_WAIT_DISCONNECT;
 			stpar->isTransFinish = 0;
 			//GETHANDLER(STATE_WAIT_DISCONNECT)(stpar, frame, outframe);
 		}
@@ -252,7 +252,7 @@ DEFHANDLER(hdlcStateNRMIdle)
 			if (stpar->isUIWaiting)
 			{
 				
-				gstpar->canUISend = 1;
+				stpar->canUISend = 1;
 				makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
 			}
 			//DOHANDLER(NRM, RR)(&stpar, hdlc_p, &outframe);
@@ -275,8 +275,8 @@ DEFHANDLER(hdlcStateNRMIdle)
 			{
 				//make FRMR
 				//store errorcode
-				FSMenter(FSMTypePrimary);
-				fsmstack->curstate = STATE_FRMR;
+				stpar->fsmstack = FSMenter(stpar->fsmstack, FSMTypePrimary);
+				stpar->fsmstack->curstate = STATE_FRMR;
 				stpar->isTransFinish = 0;
 				stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("frmr:RR序数错误！"), NULL);
 				//makeFRMR(stpar, frame, outframe, errorcode, glen);
@@ -289,13 +289,17 @@ DEFHANDLER(hdlcStateNRMIdle)
 		}
 		else if (GetTypes(*frame) == TYPEI)     //帧类型为I！
 		{
-			fsmstack->curstate = STATE_IREPONSE_HANDLE;
+			stpar->fsmstack->curstate = STATE_IREPONSE_HANDLE;
 			stpar->isTransFinish = 0;
 			//GETHANDLER(STATE_IREPONSE_HANDLE)(stpar, frame, outframe);
 		}
 		else
 		{
-			stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("error:不处理该类型的帧！"), NULL);
+			stpar->fsmstack = FSMenter(stpar->fsmstack, FSMTypePrimary);
+			stpar->fsmstack->curstate = STATE_FRMR;
+			stpar->isTransFinish = 0;
+			//makeFRMR(stpar, frame, outframe, errorcode, glen);
+			stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("frmr:不处理该类型的帧！"), NULL);
 		}
 	}
 	return 0;
@@ -308,8 +312,9 @@ DEFHANDLER(hdlcStateNRMHandle2)
 
 DEFHANDLER(hdlcStateNRMIR)
 {
-	FSMenter(FSMTypeIResponse);
-	fsmstack->curstate = STATE_WAIT_CMD;
+	//HdlcTcb *fsmstack = stpar->fsmstack;
+	stpar->fsmstack = FSMenter(stpar->fsmstack, FSMTypeIResponse);
+	stpar->fsmstack->curstate = STATE_WAIT_CMD;
 	stpar->isTransFinish = 0;
 	//GETHANDLER(fsmstack->curstate)(stpar, frame, outframe);
 	return 0;
@@ -318,13 +323,14 @@ DEFHANDLER(hdlcStateNRMIR)
 //to do
 DEFHANDLER(hdlcStateIRWaitCmd)
 {
+	//HdlcTcb *fsmstack = stpar->fsmstack;
 	u_char write_str[255];
 	if (frame->nr != stpar->send_num || stpar->ns != stpar->rcv_num)
 	{
 		stpar->hWnd->SendMessage(WM_INFO, (WPARAM)_T("frmr:序号错误，拒绝接收该帧！"), NULL);
 		//make FRMR   输出
-		FSMenter(FSMTypePrimary);
-		fsmstack->curstate = STATE_FRMR;
+		stpar->fsmstack = FSMenter(stpar->fsmstack, FSMTypePrimary);
+		stpar->fsmstack->curstate = STATE_FRMR;
 		stpar->isTransFinish = 0;
 		/*stpar->frmr_flag = 1;
 		makeFRMR(stpar, frame, outframe, (u_char*)"", 0);*/
@@ -335,7 +341,7 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 		{
 			stpar->m = 0;
 
-			fsmstack->curstate = STATE_WAIT_RES;
+			stpar->fsmstack->curstate = STATE_WAIT_RES;
 			stpar->isTransFinish = 0;
 			stpar->isSendData = 1;
 		}
@@ -344,7 +350,7 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 		//	if (stpar->isUIWaiting)//UI发送时机1 I_COMPLETE 发送之前
 		//	{
 		//		makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
-		//		gstpar->canUISend = 1;
+		//		stpar->canUISend = 1;
 		//	}
 		//	//makeRR(stpar, frame, outframe, stpar->rcv_num, stpar->frame_p_f);
 		//	for (u_int n = 0; n < frame->infolen; n++)
@@ -376,7 +382,7 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 			if (stpar->isUIWaiting)//UI发送时机2 每段最后一帧发送之前
 			{
 				makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
-				gstpar->canUISend = 1;
+				stpar->canUISend = 1;
 			}
 			//for(u_int n = 0;n < (m + 1);n++)//上报，获得需要返回的信息域
 			// {
@@ -397,7 +403,7 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 			//	0x06, 0x04, 0x04, 0x0E, 0x01, 0x06, 0x01};
 			//makeI(stpar, frame, outframe, data, sizeof(data)/sizeof(u_char), 0, 1, s_rcv, s_send);
 			
-			ApplSend(frame, stpar->save_inf, stpar->m);
+			ApplSend(stpar, frame, stpar->save_inf, stpar->m);
 			stpar->m = 0;
 
 			//fsmstack->curstate = STATE_WAIT_RES;
@@ -426,6 +432,8 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 			}
 			stpar->rcv_num++;
 			stpar->rcv_num = stpar->rcv_num % 8;
+			//stpar->send_num = 0;
+			//stpar->rcv_num = 0;
 			//make RR   将要接收的序号也要改
 			makeRR(stpar, frame, outframe, stpar->rcv_num, stpar->frame_p_f);
 		}
@@ -435,6 +443,7 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 
 DEFHANDLER(hdlcStateIRWaitRes) //等待Appl消息
 {
+	//HdlcTcb *fsmstack = stpar->fsmstack;
 	u_int len;
 	u_char *buf;
 	u_int nwin, tail;
@@ -450,7 +459,7 @@ DEFHANDLER(hdlcStateIRWaitRes) //等待Appl消息
 	{
 		stpar->seglen = stpar->seglen + 1;
 	}
-	fsmstack->curstate = STATE_SEND_DATA;
+	stpar->fsmstack->curstate = STATE_SEND_DATA;
 	stpar->isTransFinish = 0;
 	stpar->m = 0;
 	stpar->numSegHaveSend = 0;
@@ -459,6 +468,7 @@ DEFHANDLER(hdlcStateIRWaitRes) //等待Appl消息
 
 DEFHANDLER(hdlcStateIRSendData)
 {
+	HdlcTcb *fsmstack = stpar->fsmstack;
 	u_char *send_buf = stpar->sendbuf;
 	u_int m = stpar->m;
 	int i = 0, j = 0;
@@ -499,7 +509,7 @@ DEFHANDLER(hdlcStateIRSendData)
 		}
 		else if (m == stpar->sendlen)
 	{
-		FSMenter(FSMTypeNRM);
+		stpar->fsmstack = FSMenter(stpar->fsmstack, FSMTypeNRM);
 		fsmstack->curstate = STATE_NRM_IDLE;
 	}
 		else

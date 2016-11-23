@@ -104,9 +104,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ApplInterface.h" />
-    <ClInclude Include="eventhandler.h" />
-    <ClInclude Include="framedef.h" />
+    <ClInclude Include="ConsoleDlg.h" />
+    <ClInclude Include="hdlceventhandler.h" />
+    <ClInclude Include="hdlc.h" />
     <ClInclude Include="hdlcFSM.h" />
+    <ClInclude Include="hdlcutil.h" />
+    <ClInclude Include="MyLayout.h" />
+    <ClInclude Include="PropertyDlg.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Server.h" />
     <ClInclude Include="ServerDlg.h" />
@@ -118,9 +122,11 @@
   <ItemGroup>
     <ClCompile Include="ApplInterface.cpp" />
     <ClCompile Include="checksum.cpp" />
+    <ClCompile Include="ConsoleDlg.cpp" />
     <ClCompile Include="eventhandler.cpp" />
     <ClCompile Include="fsmswitch.cpp" />
     <ClCompile Include="hdlc.cpp" />
+    <ClCompile Include="PropertyDlg.cpp" />
     <ClCompile Include="Server.cpp" />
     <ClCompile Include="ServerDlg.cpp" />
     <ClCompile Include="ServerSocket.cpp" />
@@ -134,6 +140,9 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Server.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\toolbar1.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

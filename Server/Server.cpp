@@ -73,7 +73,7 @@ BOOL CServerApp::InitInstance()
 	// 例如修改为公司或组织名
 	SetRegistryKey(_T("应用程序向导生成的本地应用程序"));
 
-	CServerDlg dlg;
+	CAboutDlg dlg;
 	m_pMainWnd = &dlg;
 	INT_PTR nResponse = dlg.DoModal();
 	if (nResponse == IDOK)
@@ -87,6 +87,10 @@ BOOL CServerApp::InitInstance()
 		//  “取消”来关闭对话框的代码
 	}
 
+	/*CServerDlg dlg2;
+	dlg.Create(IDD_SERVER_DIALOG);
+	dlg2.ShowWindow(SW_SHOWNORMAL);*/
+
 	// 删除上面创建的 shell 管理器。
 	if (pShellManager != NULL)
 	{
@@ -98,3 +102,9 @@ BOOL CServerApp::InitInstance()
 	return FALSE;
 }
 
+
+
+void CServerApp::DoSend()
+{
+
+}

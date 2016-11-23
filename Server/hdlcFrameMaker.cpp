@@ -1,12 +1,13 @@
-#include "eventhandler.h"
-#include "framedef.h"
-
+#include "stdafx.h"
+#include "hdlc.h"
+#include "hdlcutil.h"
+#include "hdlceventhandler.h"
 
 
 
 //------------------------------------util functions--------------------------------------------
 //int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe);
-int makeRR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
+int makeRR(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -17,13 +18,13 @@ int makeRR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int p
 	outframe->ns = 0;
 	outframe->pollfin = pf;
 	outframe->infolen = 0;
-	outframe->dst_addr = tcb->main_pot_addr;
-	outframe->dst_addrlen = tcb->main_pot_addrlen;
-	outframe->src_addr = tcb->slav_pot_addr;
-	outframe->src_addrlen = tcb->slav_pot_addrlen;
-	outframe->f_format.frame_sublen = tcb->main_pot_addrlen + tcb->slav_pot_addrlen + 5;
+	outframe->dst_addr = stpar->main_pot_addr;
+	outframe->dst_addrlen = stpar->main_pot_addrlen;
+	outframe->src_addr = stpar->slav_pot_addr;
+	outframe->src_addrlen = stpar->slav_pot_addrlen;
+	outframe->f_format.frame_sublen = stpar->main_pot_addrlen + stpar->slav_pot_addrlen + 5;
 	outframe->end_flag = STARTFLAG;
-	convFrameHex(outframe, pData);
+	convFrameHex(stpar, outframe, pData);
 
 	//calculate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
@@ -36,11 +37,11 @@ int makeRR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int p
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
-	tcb->send_flag = 1;
+	stpar->send_flag = 1;
 	return 0;
 }
 
-int makeRNR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
+int makeRNR(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe, u_int nr, u_int pf)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -51,13 +52,13 @@ int makeRNR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int 
 	outframe->ns = 0;
 	outframe->pollfin = pf;
 	outframe->infolen = 0;
-	outframe->dst_addr = tcb->main_pot_addr;
-	outframe->dst_addrlen = tcb->main_pot_addrlen;
-	outframe->src_addr = tcb->slav_pot_addr;
-	outframe->src_addrlen = tcb->slav_pot_addrlen;
-	outframe->f_format.frame_sublen = tcb->main_pot_addrlen + tcb->slav_pot_addrlen + 5;
+	outframe->dst_addr = stpar->main_pot_addr;
+	outframe->dst_addrlen = stpar->main_pot_addrlen;
+	outframe->src_addr = stpar->slav_pot_addr;
+	outframe->src_addrlen = stpar->slav_pot_addrlen;
+	outframe->f_format.frame_sublen = stpar->main_pot_addrlen + stpar->slav_pot_addrlen + 5;
 	outframe->end_flag = STARTFLAG;
-	convFrameHex(outframe, pData);
+	convFrameHex(stpar, outframe, pData);
 
 	//calculate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
@@ -70,11 +71,11 @@ int makeRNR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_int nr, u_int 
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
-	tcb->send_flag = 1;
+	stpar->send_flag = 1;
 	return 0;
 }
 
-int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen)
+int makeUI(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -85,17 +86,17 @@ int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, 
 	outframe->ns = 0;
 	outframe->pollfin = 1;
 	outframe->infolen = infolen;
-	outframe->dst_addr = tcb->main_pot_addr;
-	outframe->dst_addrlen = tcb->main_pot_addrlen;
-	outframe->src_addr = tcb->slav_pot_addr;
-	outframe->src_addrlen = tcb->slav_pot_addrlen;
-	outframe->f_format.frame_sublen = tcb->main_pot_addrlen + tcb->slav_pot_addrlen + 5;
+	outframe->dst_addr = stpar->main_pot_addr;
+	outframe->dst_addrlen = stpar->main_pot_addrlen;
+	outframe->src_addr = stpar->slav_pot_addr;
+	outframe->src_addrlen = stpar->slav_pot_addrlen;
+	outframe->f_format.frame_sublen = stpar->main_pot_addrlen + stpar->slav_pot_addrlen + 5;
 	outframe->end_flag = STARTFLAG;
 	for (int i = 0; i <= infolen; i++)
 	{
 		outframe->info_buff[i] = infobuf[i];
 	}
-	convFrameHex(outframe, pData);
+	convFrameHex(stpar, outframe, pData);
 	//calculate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
 	outframe->h_cs = cs_cal(pData + 1, offest);
@@ -108,11 +109,11 @@ int makeUI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, 
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
-	tcb->send_flag = 1;
+	stpar->send_flag = 1;
 	return 0;
 }
 
-int makeSNRM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
+int makeSNRM(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -123,13 +124,13 @@ int makeSNRM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 	outframe->ns = 0;
 	outframe->pollfin = FON;
 	outframe->infolen = 0;
-	outframe->dst_addr = tcb->main_pot_addr;
-	outframe->dst_addrlen = tcb->main_pot_addrlen;
-	outframe->src_addr = tcb->slav_pot_addr;
-	outframe->src_addrlen = tcb->slav_pot_addrlen;
-	outframe->f_format.frame_sublen = tcb->main_pot_addrlen + tcb->slav_pot_addrlen + 5;
+	outframe->dst_addr = stpar->main_pot_addr;
+	outframe->dst_addrlen = stpar->main_pot_addrlen;
+	outframe->src_addr = stpar->slav_pot_addr;
+	outframe->src_addrlen = stpar->slav_pot_addrlen;
+	outframe->f_format.frame_sublen = stpar->main_pot_addrlen + stpar->slav_pot_addrlen + 5;
 	outframe->end_flag = STARTFLAG;
-	convFrameHex(outframe, pData);
+	convFrameHex(stpar, outframe, pData);
 	//calculate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
 	outframe->h_cs = cs_cal(pData + 1, offest);
@@ -141,11 +142,11 @@ int makeSNRM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
-	tcb->send_flag = 1;
+	stpar->send_flag = 1;
 	return 0;
 }
 
-int makeDM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
+int makeDM(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -156,13 +157,13 @@ int makeDM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 	outframe->ns = 0;
 	outframe->pollfin = FON;
 	outframe->infolen = 0;
-	outframe->dst_addr = tcb->main_pot_addr;
-	outframe->dst_addrlen = tcb->main_pot_addrlen;
-	outframe->src_addr = tcb->slav_pot_addr;
-	outframe->src_addrlen = tcb->slav_pot_addrlen;
-	outframe->f_format.frame_sublen = tcb->main_pot_addrlen + tcb->slav_pot_addrlen + 5;
+	outframe->dst_addr = stpar->main_pot_addr;
+	outframe->dst_addrlen = stpar->main_pot_addrlen;
+	outframe->src_addr = stpar->slav_pot_addr;
+	outframe->src_addrlen = stpar->slav_pot_addrlen;
+	outframe->f_format.frame_sublen = stpar->main_pot_addrlen + stpar->slav_pot_addrlen + 5;
 	outframe->end_flag = STARTFLAG;
-	convFrameHex(outframe, pData);
+	convFrameHex(stpar, outframe, pData);
 
 	//calculate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
@@ -175,11 +176,11 @@ int makeDM(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen-2);
 	}
-	tcb->send_flag = 1;
+	stpar->send_flag = 1;
 	return 0;
 }
 
-int makeDISC(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
+int makeDISC(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -190,13 +191,13 @@ int makeDISC(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 	outframe->ns = 0;
 	outframe->pollfin = FON;
 	outframe->infolen = 0;
-	outframe->dst_addr = tcb->main_pot_addr;
-	outframe->dst_addrlen = tcb->main_pot_addrlen;
-	outframe->src_addr = tcb->slav_pot_addr;
-	outframe->src_addrlen = tcb->slav_pot_addrlen;
-	outframe->f_format.frame_sublen = tcb->main_pot_addrlen + tcb->slav_pot_addrlen + 5;
+	outframe->dst_addr = stpar->main_pot_addr;
+	outframe->dst_addrlen = stpar->main_pot_addrlen;
+	outframe->src_addr = stpar->slav_pot_addr;
+	outframe->src_addrlen = stpar->slav_pot_addrlen;
+	outframe->f_format.frame_sublen = stpar->main_pot_addrlen + stpar->slav_pot_addrlen + 5;
 	outframe->end_flag = STARTFLAG;
-	convFrameHex(outframe, pData);
+	convFrameHex(stpar, outframe, pData);
 
 	//calculate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
@@ -209,11 +210,11 @@ int makeDISC(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe)
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
-	tcb->send_flag = 1;
+	stpar->send_flag = 1;
 	return 0;
 }
 
-int makeFRMR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen)
+int makeFRMR(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -224,11 +225,11 @@ int makeFRMR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf
 	outframe->ns = 0;
 	outframe->pollfin = FON;
 	outframe->infolen = infolen;
-	outframe->dst_addr = tcb->main_pot_addr;
-	outframe->dst_addrlen = tcb->main_pot_addrlen;
-	outframe->src_addr = tcb->slav_pot_addr;
-	outframe->src_addrlen = tcb->slav_pot_addrlen;
-	outframe->f_format.frame_sublen = tcb->main_pot_addrlen + tcb->slav_pot_addrlen + 5;
+	outframe->dst_addr = stpar->main_pot_addr;
+	outframe->dst_addrlen = stpar->main_pot_addrlen;
+	outframe->src_addr = stpar->slav_pot_addr;
+	outframe->src_addrlen = stpar->slav_pot_addrlen;
+	outframe->f_format.frame_sublen = stpar->main_pot_addrlen + stpar->slav_pot_addrlen + 5;
 	if (infolen != 0)
 	{
 		for (int i = 0; i < infolen; i++)
@@ -238,7 +239,7 @@ int makeFRMR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf
 		outframe->f_format.frame_sublen += infolen + 2;
 	}
 	outframe->end_flag = 0x7e;
-	convFrameHex(outframe, pData);
+	convFrameHex(stpar, outframe, pData);
 
 	//calculate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
@@ -251,11 +252,11 @@ int makeFRMR(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
-	tcb->send_flag = 1;
+	stpar->send_flag = 1;
 	return 0;
 }
 
-int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int len)
+int makeUA(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int len)
 {
 	outframe->start_flag = STARTFLAG;
 	outframe->f_format.frame_type = FFORMTYPE;
@@ -266,10 +267,10 @@ int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *settingda
 	outframe->nr = 0;
 	outframe->ns = 0;
 	outframe->pollfin = FON;
-	outframe->dst_addr = tcb->main_pot_addr;
-	outframe->dst_addrlen = tcb->main_pot_addrlen;
-	outframe->src_addr = tcb->slav_pot_addr;
-	outframe->src_addrlen = tcb->slav_pot_addrlen;
+	outframe->dst_addr = stpar->main_pot_addr;
+	outframe->dst_addrlen = stpar->main_pot_addrlen;
+	outframe->src_addr = stpar->slav_pot_addr;
+	outframe->src_addrlen = stpar->slav_pot_addrlen;
 
 	outframe->f_format.frame_sublen = outframe->dst_addrlen + outframe->src_addrlen + 5;
 	if (len > 0)
@@ -282,7 +283,7 @@ int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *settingda
 	}
 
 	u_char pData[255];
-	convFrameHex(outframe, pData);
+	convFrameHex(stpar, outframe, pData);
 	//calculate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
 	outframe->h_cs = cs_cal(pData + 1, offest);
@@ -294,11 +295,11 @@ int makeUA(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *settingda
 	{
 		outframe->f_cs = f_cs_cal(pData, len + outframe->src_addrlen);
 	}
-	tcb->send_flag = 1;
+	stpar->send_flag = 1;
 	return 0;
 }
 
-int makeI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen, u_int seg, u_int pf, u_char rcv, u_char snd)
+int makeI(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen, u_int seg, u_int pf, u_char rcv, u_char snd)
 {
 	u_char pData[255];
 	outframe->start_flag = STARTFLAG;
@@ -309,11 +310,11 @@ int makeI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u
 	outframe->ns = snd;
 	outframe->pollfin = pf;
 	outframe->infolen = infolen;
-	outframe->dst_addr = tcb->main_pot_addr;
-	outframe->dst_addrlen = tcb->main_pot_addrlen;
-	outframe->src_addr = tcb->slav_pot_addr;
-	outframe->src_addrlen = tcb->slav_pot_addrlen;
-	outframe->f_format.frame_sublen = tcb->slav_pot_addrlen+ tcb->main_pot_addrlen+ 5;
+	outframe->dst_addr = stpar->main_pot_addr;
+	outframe->dst_addrlen = stpar->main_pot_addrlen;
+	outframe->src_addr = stpar->slav_pot_addr;
+	outframe->src_addrlen = stpar->slav_pot_addrlen;
+	outframe->f_format.frame_sublen = stpar->slav_pot_addrlen+ stpar->main_pot_addrlen+ 5;
 	if (infolen != 0)
 	{
 		for (int i = 0; i < infolen; i++)
@@ -323,7 +324,7 @@ int makeI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u
 		outframe->f_format.frame_sublen += infolen + 2;
 	}
 	outframe->end_flag = 0x7e;
-	convFrameHex(outframe, pData);
+	convFrameHex(stpar, outframe, pData);
 
 	//calculate h_cs
 	u_int offest = 3 + outframe->dst_addrlen + outframe->src_addrlen;
@@ -336,6 +337,6 @@ int makeI(HdlcStationParam *tcb, hdlc *frame, hdlc *outframe, u_char *infobuf, u
 	{
 		outframe->f_cs = cs_cal(pData + 1, outframe->f_format.frame_sublen - 2);
 	}
-	tcb->send_flag = 1;
+	stpar->send_flag = 1;
 	return 0;
 }

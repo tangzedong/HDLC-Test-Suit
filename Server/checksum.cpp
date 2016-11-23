@@ -1,6 +1,6 @@
 #include "stdafx.h"
 
-#include "framedef.h"
+#include "hdlc.h"
 unsigned short fcstab[] = { 
 	0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf,
 	0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7,
@@ -39,7 +39,7 @@ u_short h_cs_cal(u_char data[MAX_LEN], u_char data_len)
 {
 	unsigned short hcs = 0xffff;    // 初始化
 	//unsigned char str[] = {0xA0,0x08,0x21,0x02,0x23,0x1F};
-	unsigned int nLength = data_len + 4;//不计算开始和结束标志
+	unsigned int nLength = data_len;//不计算开始和结束标志
 	unsigned char*pData = data;
 	pData++;//从第二个字节开始
 	while (nLength>0)
@@ -59,7 +59,7 @@ u_short h_cs_cal(u_char data[MAX_LEN], u_char data_len)
 
 u_short f_cs_cal(u_char data[MAX_LEN], u_char data_len)
 {
-	return h_cs_cal(data, data_len + 2);
+	return h_cs_cal(data, data_len);
 }
 
 u_short cs_cal(u_char data[MAX_LEN], u_char data_len)

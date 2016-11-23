@@ -3,8 +3,8 @@
 
 #include "stdafx.h"
 #include "Server.h"
-#include "ServerSocket.h"
 #include "ServerDlg.h"
+#include "ServerSocket.h"
 
 
 // CServerSocket
@@ -51,7 +51,7 @@ void CServerSocket::OnReceive(int nErrorCode)  //客户端调用一次send函数会触发OnR
 }
 
 
-void CServerSocket::setParentDlg(CServerDlg* pDlg)
+void CServerSocket::setParentDlg(CAboutDlg* pDlg)
 {
 	m_pDlg=pDlg;  //关联两个类
 }

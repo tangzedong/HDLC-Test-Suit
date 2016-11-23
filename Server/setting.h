@@ -1,6 +1,2 @@
-#include "framedef.h"
-struct _hdlcsetting
-{
-	u_int maxInfoSize;
-	u_int winSize;
-};
+#pragma once
+typedef struct _statparam HdlcStationParam;

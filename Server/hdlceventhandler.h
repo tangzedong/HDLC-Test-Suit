@@ -1,22 +1,9 @@
 #ifndef _EVENT_HANDLER
 #define _EVENT_HANDLER
-#include "hdlcFSM.h"
-#include "framedef.h"
 
-#define StateHandler int(**)(HdlcStationParam*, hdlc*, hdlc*)
-#define DEFHANDLER(name) int H##name(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe)
-#define _HANDLER(name) H##name
-#define GETHANDLER(state) (*(fsmstack->listhandler[state]))
+#include "hdlc.h"
+//#include "hdlcFSM.h"
 
-typedef int(*statehandler)(HdlcStationParam*, hdlc*, hdlc*);
-
-
-//statehandler listStateHandler[];
-statehandler PrimaryStateHandler[];
-statehandler PrehandleStateHandler[];
-statehandler NRMStateHandler[];
-statehandler IRStateHandler[];
-statehandler *StateHandlers[];
 //×´Ì¬´¦Àíº¯Êý
 
 int HhdlcStateNDM(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe);

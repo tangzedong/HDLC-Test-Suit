@@ -27,6 +27,7 @@ public:
 // й╣ож
 
 	DECLARE_MESSAGE_MAP()
+	void DoSend();
 };
 
 extern CServerApp theApp;

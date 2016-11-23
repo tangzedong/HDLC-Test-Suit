@@ -1,11 +1,16 @@
+#pragma once
 #ifndef _HDLC_FSM
 #define _HDLC_FSM
-#include "stdafx.h"
-#include "Server.h"
-#include "ServerDlg.h"
-#include "afxdialogex.h"
-#include "framedef.h"
-//#include "eventhandler.h"
+//#include "stdafx.h"
+//#include "Server.h"
+//#include "ServerDlg.h"
+//#include "afxdialogex.h"
+
+#include "hdlc.h"
+#include "hdlcutil.h"
+//#include "hdlceventhandler.h"
+struct _hdlctcb;
+
 #define INT8U unsigned short
 #define INT16U unsigned short
 
@@ -18,7 +23,12 @@
 #define WIN_SIZE 1//window size
 #define MAX_NB_OF_RETRIES 10//retrying times
 
-typedef struct hdlc hdlc, *hdlcpointer;
+#define StateHandler int(**)(HdlcStationParam*, hdlc*, hdlc*)
+#define DEFHANDLER(name) int H##name(HdlcStationParam* stpar, hdlc* frame, hdlc* outframe)
+#define _HANDLER(name) H##name
+#define GETHANDLER(fsmstack) (*(fsmstack->listhandler[fsmstack->curstate]))
+typedef int(*statehandler)(HdlcStationParam*, hdlc*, hdlc*);
+
 //States of Primary FSM
 enum{
 	STATE_NDM=0,
@@ -44,66 +54,13 @@ enum{
 	STATE_SEND_DATA,
 };
 
-typedef struct _statparam
-{
-	u_int slav_pot_addr;
-	u_int main_pot_addr;
-	u_char slav_pot_addrlen;
-	u_char main_pot_addrlen;
-	unsigned char started;//值为1进入状态循环
-	unsigned char rcv_num;      //我自己记录的接收序号
-	unsigned char send_num;   //我自己记录的发送序号
-	unsigned char nr;
-	unsigned char ns;
-	//unsigned char frmr_flag;          //值为1发送FRMR帧
-	unsigned char frame_p_f;           //记录P/F位
-	CServerDlg *hWnd;
-	unsigned char send_flag;
-	u_char *save_inf; //数据存储区
-	u_int m; //数据计数
 
-	unsigned char frmr_flag;			   //待发FRMR标志
-	unsigned char frame_discard_flag;   //无效帧标致
-
-	unsigned char disc;
-
-	unsigned char discard;
-	unsigned char frmr;
-
-	unsigned int max_rcv_info_size;
-#define	MAX_RCVINFO_SIZE 0xf2
-#define ARG_RCVINFO_INDEX 9
-
-	unsigned int rcvwindowsize;
-#define MAX_RCV_WINDOW_SIZE 0xf2
-#define ARG_RCVWINSIZE_INDEX 19
-
-	unsigned int max_snd_info_size;
-#define	MAX_SNDINFO_SIZE 0xf2
-#define ARG_SNDINFO_INDEX 5 
-
-	unsigned int sendwindowsize;
-#define MAX_SEND_WINDOW_SIZE 0xf2
-#define ARG_SNDWINSIZE_INDEX 13
-
-	unsigned char canUISend;
-	unsigned char isUIWaiting;
-
-	unsigned char isTransFinish;
-	unsigned char isSendData;
-
-	unsigned char *sendbuf;
-	unsigned int sendlen;
-	unsigned int seglen;
-	unsigned int segtail;
-	unsigned int numSegHaveSend;
-} HdlcStationParam;
-
-typedef struct _hdlctcb
+struct _hdlctcb
 {
 	unsigned int curstate;
 	int condition;
-	int(**listhandler)(HdlcStationParam*, hdlc*, hdlc*);;
+	//int(**listhandler)(struct _hdlctcb *tcb, HdlcStationParam*, hdlc*, hdlc*);
+	statehandler *listhandler;
 	int error;
 	unsigned int fsmtype;
 #define FSMTypePrimary 0
@@ -112,11 +69,10 @@ typedef struct _hdlctcb
 #define FSMTypeIResponse 3
 	struct _hdlctcb *next;
 	struct _hdlctcb *prev;
-} HdlcTcb;
+};// HdlcTcb;
 
-extern HdlcTcb *fsmstack;
-
-
+typedef struct _hdlctcb HdlcTcb;
+//extern HdlcTcb *fsmstack;
 
 typedef struct {
 	INT8U frame_type:3;            //帧类型
@@ -126,23 +82,17 @@ typedef struct {
 	INT8U frame_discard_flag:1;    //帧未成功接收标识
 }T_HdlcHandleResult;
 
-typedef struct _hdlcparam
-{
-	INT8U arg;
-#define ARG_MAX_SND_SIZE 0x05
-#define ARG_SND_WIN_SIZE 0x07
-#define ARG_MAX_RCV_SIZE 0x06
-#define ARG_RCV_WIN_SIZE 0x08
-
-	INT16U value;
-	_hdlcparam *next;
-}hdlcparam;
 //FSM栈管理
-int FSMinit();
-int FSMreturn(void);
-int FSMenter(u_int fsmtype);
-int HdlcSetOpt(hdlcpointer frame);
-void HdlcParamInit();
-int HdlcSetParam(u_char* paramstr, u_int len);
-int HdlcTransParamInit(HdlcStationParam *stpar);
+HdlcTcb *FSMinit(HdlcTcb *fsmstack);
+HdlcTcb *FSMreturn(HdlcTcb *fsmstack);
+HdlcTcb *FSMenter(HdlcTcb *fsmstack, u_int fsmtype);
+
+
+
+//statehandler listStateHandler[];
+statehandler PrimaryStateHandler[];
+statehandler PrehandleStateHandler[];
+statehandler NRMStateHandler[];
+statehandler IRStateHandler[];
+statehandler *StateHandlers[];
 #endif

@@ -1,7 +1,8 @@
 #pragma once
+#include <afxsock.h>
 
 // CServerSocket 命令目标
-class CServerDlg;
+class CAboutDlg;
 class CServerSocket : public CAsyncSocket
 {
 public:
@@ -11,9 +12,9 @@ public:
 	virtual void OnAccept(int nErrorCode);
 	virtual void OnReceive(int nErrorCode);
 private:
-	CServerDlg* m_pDlg;   
+	CAboutDlg* m_pDlg;   
 public:
-	void setParentDlg(CServerDlg* pDlg);  //用于关联两个类
+	void setParentDlg(CAboutDlg* pDlg);  //用于关联两个类
 };
 
 

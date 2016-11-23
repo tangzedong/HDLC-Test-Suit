@@ -1,9 +1,10 @@
-#include "framedef.h"
+#include "stdafx.h"
+#include "hdlc.h"
 #include "hdlcFSM.h"
-#include "eventhandler.h"
-HdlcTcb *fsmstack = NULL;
+#include "hdlceventhandler.h"
+//HdlcTcb *fsmstack = NULL;
 
-int FSMinit()
+HdlcTcb* FSMinit(HdlcTcb *fsmstack)
 {
 	if (fsmstack != NULL)
 	{
@@ -19,10 +20,10 @@ int FSMinit()
 	fsmstack->curstate = STATE_NDM;//³õÊ¼»¯×´Ì¬»ú
 	pTcb->prev = NULL;
 	pTcb->next = NULL;
-	return 0;
+	return fsmstack;
 }
 
-int FSMreturn(void)
+HdlcTcb* FSMreturn(HdlcTcb *fsmstack)
 {
 	assert(0);
 	if (fsmstack != NULL)
@@ -42,36 +43,36 @@ int FSMreturn(void)
 	}
 	else
 	{
-		return -1;
+		return fsmstack;
 	}
-	return 0;
+	return fsmstack;
 }
 
-int FSMenter2(u_int fsmtype)
-{
-	HdlcTcb *tcb = new HdlcTcb();
-	tcb->fsmtype = fsmtype;
-	tcb->listhandler = StateHandlers[fsmtype];
-	tcb->curstate = 0;
-	tcb->prev = NULL;
-	tcb->next = NULL;
-	if (fsmstack != NULL)
-	{
-		fsmstack->next = tcb;
-		tcb->prev = fsmstack;
-		tcb->next = NULL;
-		fsmstack = tcb;
-	}
-	else
-	{
-		fsmstack = tcb;
-		fsmstack->next = NULL;
-		fsmstack->prev = NULL;
-	}
-	return 0;
-}
+//int FSMenter2(u_int fsmtype)
+//{
+//	HdlcTcb *tcb = new HdlcTcb();
+//	tcb->fsmtype = fsmtype;
+//	tcb->listhandler = StateHandlers[fsmtype];
+//	tcb->curstate = 0;
+//	tcb->prev = NULL;
+//	tcb->next = NULL;
+//	if (fsmstack != NULL)
+//	{
+//		fsmstack->next = tcb;
+//		tcb->prev = fsmstack;
+//		tcb->next = NULL;
+//		fsmstack = tcb;
+//	}
+//	else
+//	{
+//		fsmstack = tcb;
+//		fsmstack->next = NULL;
+//		fsmstack->prev = NULL;
+//	}
+//	return 0;
+//}
 
-int FSMenter(u_int fsmtype)
+HdlcTcb* FSMenter(HdlcTcb *fsmstack, u_int fsmtype)
 {
 	HdlcTcb *tcb = new HdlcTcb();
 	tcb->fsmtype = fsmtype;
@@ -96,10 +97,14 @@ int FSMenter(u_int fsmtype)
 			fsmstack = tcb;
 		}
 	}
-	return 0;
+	else
+	{
+		fsmstack = tcb;
+	}
+	return fsmstack;
 }
 
-int FSMclean(HdlcTcb *tcb)
+HdlcTcb* FSMclean(HdlcTcb *fsmstack)
 {
 	if (fsmstack != NULL)
 	{
@@ -109,5 +114,5 @@ int FSMclean(HdlcTcb *tcb)
 		}
 
 	}
-	return 0;
+	return fsmstack;
 }

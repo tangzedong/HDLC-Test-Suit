@@ -1,4 +1,5 @@
-#include"framedef.h"
+#include "stdafx.h"
+#include "hdlc.h"
 void writetxt(FILE* z,u_char write[MAX_LEN],u_char out_len)
 {
 	//unsigned char write_str[] = {0x7E,0xA0,0x21,0x21,0x02,0x23,0x73,0x8F,0x72, 0x7E};
