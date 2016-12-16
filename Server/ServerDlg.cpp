@@ -50,6 +50,8 @@ CAboutDlg::CAboutDlg() : CDialogEx(CAboutDlg::IDD)
 , m_strServerName(_T(""))
 , m_nServerPort(0)
 , m_bListening(0)
+, m_bFrameIncomplete(0)
+, m_nPos(0)
 {
 	for (int i = 0; i < 25; i++)
 	{
@@ -72,6 +74,7 @@ BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
 	ON_NOTIFY(BCN_DROPDOWN, IDC_BUTTON_NEWSER, &CAboutDlg::OnDropdownButtonNewser)
 	ON_COMMAND(ID_NEW_SERVER, &CAboutDlg::OnNewServer)
 	ON_COMMAND(ID_NEW_EXIT, &CAboutDlg::OnNewExit)
+	ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 
@@ -109,6 +112,8 @@ CServerDlg::CServerDlg(CWnd* pParent /*=NULL*/) //
 	stpar->slav_pot_addr = 0x91;
 	stpar->main_pot_addrlen = 1;
 	stpar->slav_pot_addrlen = 2;
+	stpar->numSegSended = stpar->rcvwindowsize*2;
+	m_totalFrameSend = stpar->rcvwindowsize * 2;
 	//memset(stpar->fsmstack, 0, sizeof(HdlcTcb));
 }
 
@@ -143,6 +148,11 @@ BEGIN_MESSAGE_MAP(CServerDlg, CDialogEx)
 	ON_WM_CLOSE()
 	ON_BN_CLICKED(IDC_BUTTON1, &CServerDlg::OnBnClickedButton1)
 	ON_REGISTERED_MESSAGE(AFX_WM_PROPERTY_CHANGED, &CServerDlg::OnPropertyChanged)
+	ON_BN_CLICKED(IDC_BUTTON_DATASND, &CServerDlg::OnBnClickedButtonDatasnd)
+	ON_MESSAGE(WM_APPLAYERREADY, &CServerDlg::OnAppLayerReady)
+	ON_MESSAGE(IDM_DATALINKREADY, &CServerDlg::OnDatalinkReady)
+	ON_MESSAGE(IDM_RESENDWND, &CServerDlg::OnResendWnd)
+	ON_MESSAGE(IDM_SENDDATA, &CServerDlg::OnSendData)
 END_MESSAGE_MAP()
 
 
@@ -222,14 +232,14 @@ BOOL CServerDlg::OnInitDialog()
 	CRect rectDummy;
 	rectDummy.SetRectEmpty();
 	if (!m_listReceived.Create(dwStyle, rectDummy, &m_tabout, 2) ||
-		!m_listSent.Create(dwStyle, rectDummy, &m_tabout, 3) ||
+		!m_listLog.Create(dwStyle, rectDummy, &m_tabout, 3) ||
 		!m_liststateinfo.Create(dwStyle, rectDummy, &m_tabout, 4))
 	{
 		TRACE0("未能创建输出窗口\n");
 		return -1;      // 未能创建
 	}
-	m_tabout.AddTab(&m_listReceived, _T("接收"), 0, FALSE);
-	m_tabout.AddTab(&m_listSent, _T("发送"), 1, FALSE);
+	m_tabout.AddTab(&m_listReceived, _T("无用（接收）"), 0, FALSE);
+	m_tabout.AddTab(&m_listLog, _T("日志"), 1, FALSE);
 	m_tabout.AddTab(&m_liststateinfo, _T("状态"), 2, FALSE);
 
 	m_tabout.SetWindowPos(FromHandle(HWND_TOP), 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
@@ -326,8 +336,8 @@ void CServerDlg::OnClickedButtonListen()
 	GetDlgItem(IDC_EDIT_SERVERPORT)->EnableWindow(FALSE);
 
 	//清除两个列表框信息
-	while (m_listSent.GetCount() != 0)
-		m_listSent.DeleteString(0);
+	while (m_listLog.GetCount() != 0)
+		m_listLog.DeleteString(0);
 	while (m_listReceived.GetCount() != 0)
 		m_listReceived.DeleteString(0);
 	//更新按钮及文本框的状态
@@ -385,7 +395,7 @@ void CServerDlg::onReceive(hdlcpointer frame)//如果OnReceive()函数执行成功会转来
 	int nReceivedLen;
 	CString strReceived;
 	*hdlc_p = *frame;
-	!stpar->disc && KillTimer(1);//关闭超时计数器
+	!stpar->disc && KillTimer(TM_IDLETIMEOUT);//关闭超时计数器
 	stpar->send_flag = 0;	//是否发送响应帧
 
 	////-----------------------------------------------------------将结构体赋值----------------------------------------------------------------------
@@ -399,16 +409,16 @@ void CServerDlg::onReceive(hdlcpointer frame)//如果OnReceive()函数执行成功会转来
 	switch (res)
 	{
 	case ERROR_STARTFLAG:
-		AfxMessageBox(_T("开始标志位错误！"), MB_OK | MB_ICONSTOP);
+		m_liststateinfo.AddString(_T("开始标志位错误！"));
 		return;
 	case ERROR_FORMAT_TYPE:
-		AfxMessageBox(_T("HDLC格式类型错误!"));
+		m_liststateinfo.AddString(_T("HDLC格式类型错误!"));
 		return;
 	case ERROR_DST_ADDR_LEN:
-		AfxMessageBox(_T("目的地址长度不正确！"), MB_OK | MB_ICONSTOP);
+		m_liststateinfo.AddString(_T("目的地址长度不正确！"));
 		return;
 	case ERROR_SRC_ADDR_LEN:
-		AfxMessageBox(_T("源地址长度不正确！"), MB_OK | MB_ICONSTOP);
+		m_liststateinfo.AddString(_T("源地址长度不正确！"));
 		return;
 	case ERROR_INF_OVERFLOW://信息域超长
 		{
@@ -423,7 +433,7 @@ void CServerDlg::onReceive(hdlcpointer frame)//如果OnReceive()函数执行成功会转来
 			//	UpdateData(FALSE);
 			//}
 			////  m_liststateinfo.AddString(_T("信息域超长，超出协商的最大信息长度！"));
-			AfxMessageBox(_T("信息域超长，超出协商的最大信息长度！！！"), MB_OK | MB_ICONSTOP);
+			m_liststateinfo.AddString(_T("信息域超长，超出协商的最大信息长度！！！"));
 			return;
 		}
 		break;
@@ -467,11 +477,17 @@ void CServerDlg::onReceive(hdlcpointer frame)//如果OnReceive()函数执行成功会转来
 		//stpar->frmr_flag = 1;
 		//return;
 	}
-
-
-
-
 	m_liststateinfo.AddString(_T("一帧接收结束！"));
+
+	char buf[32];
+	_strtime(buf);
+	CString strMsg;
+	strMsg.Format(_T("%s %5s %8s %7s %3d,%3d"), buf, GetTypestr(*hdlc_p), "receive", "normal", hdlc_p->ns, hdlc_p->nr);
+	m_listLog.AddString(strMsg);
+	int iCount = m_listLog.GetCount();
+	if (iCount > 0)
+		m_listLog.SetCurSel(iCount - 1);
+
 	if (stpar->started == 0)
 	{
 		stpar->started = 1;//frame_ind = 1;//标志可以进入状态循环
@@ -500,18 +516,20 @@ void CServerDlg::onReceive(hdlcpointer frame)//如果OnReceive()函数执行成功会转来
 
 		if (stpar->isUIWaiting == 1 && stpar->canUISend == 1)
 		{
-			_TCHAR  sendStr[1024];
-			u_char sendData[255];
-			convFrameHex(stpar, &gUIFrame, write_str);
-			convFrameStr(stpar, &gUIFrame, sendStr);
-			CString m_strToServer = sendStr;
-			writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
-			nSentLen = ((CAboutDlg*)AfxGetMainWnd())->DoSend(m_strToServer);
+			//tang: to do 用ServerDlg::Send代替以下功能
+			//_TCHAR  sendStr[1024];
+			//u_char sendData[255];
+			//convFrameHex(stpar, &(stpar->hWnd->m_UIFrame), write_str);
+			//convFrameStr(stpar, &(stpar->hWnd->m_UIFrame), sendStr);
+			//CString m_strToServer = sendStr;
+			//writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
+			//nSentLen = ((CAboutDlg*)AfxGetMainWnd())->DoSend(m_strToServer);
+			nSentLen = SendFrame("UI", &(stpar->hWnd->m_UIFrame));
 			if (nSentLen != SOCKET_ERROR)
 			{
 				//发送成功
-				m_listSent.AddString(_T("发送UI帧"));
-				m_listSent.AddString(m_strToServer);
+				m_liststateinfo.AddString(_T("发送UI帧"));
+				m_liststateinfo.AddString(m_strToServer);
 			}
 			stpar->canUISend = 0;
 			stpar->isUIWaiting = 0;
@@ -519,17 +537,19 @@ void CServerDlg::onReceive(hdlcpointer frame)//如果OnReceive()函数执行成功会转来
 
 		if (stpar->send_flag == 1)
 		{
-			_TCHAR  sendStr[1024];
-			u_char sendData[255];
-			convFrameHex(stpar, &outframe, write_str);
-			convFrameStr(stpar, &outframe, sendStr);
-			CString m_strToServer = sendStr;
-			writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
-			nSentLen = ((CAboutDlg*)AfxGetMainWnd())->DoSend(m_strToServer);
+			//tang: to do 用ServerDlg::Send代替以下功能
+			//_TCHAR  sendStr[1024];
+			//u_char sendData[255];
+			//convFrameHex(stpar, &outframe, write_str);
+			//convFrameStr(stpar, &outframe, sendStr);
+			//CString m_strToServer = sendStr;
+			//writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
+			//nSentLen = ((CAboutDlg*)AfxGetMainWnd())->DoSend(m_strToServer);
+			nSentLen = SendFrame(GetTypestr(outframe), &outframe);
 			if (nSentLen != SOCKET_ERROR)
 			{
 				//发送成功
-				m_listSent.AddString(m_strToServer);
+				m_liststateinfo.AddString(m_strToServer);
 			}
 			stpar->send_flag = 0;
 		}
@@ -539,7 +559,7 @@ void CServerDlg::onReceive(hdlcpointer frame)//如果OnReceive()函数执行成功会转来
 	UpdateData(FALSE);
 
 #ifndef _DEBUG
-	!stpar->disc && SetTimer(1, 10000, NULL);
+	!stpar->disc && SetTimer(TM_IDLETIMEOUT, 10000, NULL);
 #endif
 
 	return;
@@ -591,26 +611,56 @@ void CServerDlg::OnTimer(UINT_PTR nIDEvent)
 {
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	u_int timerid = (u_int)nIDEvent;
-	if (timerid == 1)
+	switch (timerid)
+	{
+	case TM_IDLETIMEOUT:
 	{
 		m_liststateinfo.AddString(_T("warning:Idle Timeout Disconnect!"));
 		m_liststateinfo.SetCurSel(m_liststateinfo.GetCount() - 1);
+
+		_TCHAR outstr[255];
+		hdlcpointer outframe = (hdlcpointer)malloc(sizeof(hdlc));
+		makeDISC(stpar, hdlc_p, outframe);
+		memset(hdlc_p, 0, sizeof(*hdlc_p));//动态分配空间，全部置零
+		FSMinit(stpar->fsmstack);
+		stpar->nr = 0;
+		stpar->ns = 0;
+		stpar->started = 0;
+		stpar->frame_p_f = 0;
+		stpar->rcv_num = 0;
+		stpar->send_num = 0;
+		stpar->frmr_flag = 0;
+		stpar->disc = 1;
+
+		free(outframe);
+		UpdateData(FALSE);
+		KillTimer(timerid);
+		break;
+
 	}
-	_TCHAR outstr[255];
-	hdlcpointer outframe = (hdlcpointer)malloc(sizeof(hdlc));
-	makeDISC(stpar, hdlc_p, outframe);
-	memset(hdlc_p, 0, sizeof(*hdlc_p));//动态分配空间，全部置零
-	FSMinit(stpar->fsmstack);
-	stpar->nr = 0;
-	stpar->ns = 0;
-	stpar->started = 0;
-	stpar->frame_p_f = 0;
-	stpar->rcv_num = 0;
-	stpar->send_num = 0;
-	stpar->frmr_flag = 0;
-	stpar->disc = 1;
-	UpdateData(FALSE);
-	KillTimer(timerid);
+	case TM_SENDDATA:
+		if (stpar->m < stpar->sendwindowsize)
+		{
+			PostMessage(WM_APPLAYERREADY);
+			KillTimer(TM_IDLETIMEOUT);
+			//SetTimer(TM_IDLETIMEOUT, m_nIdleTimeOut, NULL);
+		}
+		else
+		{
+			SetTimer(TM_IDLETIMEOUT, m_nIdleTimeOut, NULL);
+			SetTimer(TM_RESENDWND, m_nResendTimeOut, NULL);
+			KillTimer(TM_SENDDATA);
+			stpar->m = 0;
+		}
+		break;
+	case TM_RESENDWND:
+		stpar->m = 0;
+		KillTimer(TM_IDLETIMEOUT);
+		KillTimer(TM_RESENDWND);
+		PostMessage(IDM_RESENDWND);
+		break;
+	}
+
 	CDialogEx::OnTimer(nIDEvent);
 }
 
@@ -621,16 +671,9 @@ afx_msg LRESULT CServerDlg::OnReportEvent(WPARAM wParam, LPARAM lParam)
 	u_int size = (u_int)lParam;
 	for (u_int i = 0; i < size; i++)
 	{
-		gUIInfoBuf[i] = data[i];
+		m_UIInfoBuf[i] = data[i];
 	}
 	stpar->isUIWaiting = 1;
-	return 0;
-}
-
-
-afx_msg LRESULT CAboutDlg::OnApplmsg(WPARAM wParam, LPARAM lParam)
-{
-
 	return 0;
 }
 
@@ -756,7 +799,7 @@ afx_msg LRESULT CServerDlg::OnPropertyChanged(WPARAM wParam, LPARAM lParam)
 afx_msg LRESULT CServerDlg::OnSendLog(WPARAM wParam, LPARAM lParam)
 {
 	CString *strlog = (CString*)wParam;
-	m_listSent.AddString(*strlog);
+	m_listLog.AddString(*strlog);
 	delete strlog;
 	strlog = NULL;
 	return 0;
@@ -827,10 +870,12 @@ void CAboutDlg::OnClose()
 void CAboutDlg::onReceive(void)
 {
 	u_char buff[2048];
+	u_char *tempbuff = (u_char*) malloc(2048);
 	int nBufferSize = 2048;
 	int nReceivedLen;
 	CString strReceived;
-	hdlc *hdlc_p = new hdlc();
+	hdlc frame;
+	hdlc *hdlc_p = &frame;
 
 	//m_liststateinfo.AddString(_T("开始接收HDLC帧！"));
 	nReceivedLen = m_sClientSocket.Receive(buff, nBufferSize);  //Receive()函数真正执行接收功能
@@ -841,22 +886,75 @@ void CAboutDlg::onReceive(void)
 		return;
 	}
 	buff[nReceivedLen] = _T('\0');
+
 	CString szTemp(buff);
 	szTemp.Replace(_T(" "), _T(""));
 	strReceived = szTemp;
-	
 	UpdateData(FALSE);
 	//接收到的内容存储在buff中，要赋到str中做处理
-	memset(str, 0, MAX_LEN);//每次清空一下数组
 
-	convStrHex(szTemp.GetBuffer(), str);
+	memset(tempbuff, 0, MAX_LEN);//每次清空一下数组
+	nReceivedLen = convStrHex(szTemp.GetBuffer(), tempbuff);
 
+	if (m_nPos == 0)
+	{
+		int i;
+		int startflag = 0;
+		if (tempbuff[m_nPos] == 0x7E)
+		{
+			startflag = 1;
+		}
+		m_bFrameIncomplete = 1;
+		str[m_nPos++] = tempbuff[0];
+		for (i = 1; i < nReceivedLen; i++)
+		{
+			if (startflag && tempbuff[i] == 0x7E)
+			{
+				m_bFrameIncomplete = 0;
+			}
+			str[m_nPos++] = tempbuff[i];
+		}
+		if (m_bFrameIncomplete == 1)
+		{
+			SetTimer(2, 5000, NULL);
+			return;
+		}
+	}
+	else if (m_bFrameIncomplete)
+	{
+		int i;
+		for (i = 0; i < nReceivedLen && tempbuff[i] != 0x7E; i++)
+		{
+			str[m_nPos++] = tempbuff[i];
+		}
+		if (tempbuff[i] == 0x7E)
+		{
+			str[m_nPos++] = tempbuff[i];
+			m_bFrameIncomplete = 0;
+			m_nPos = 0;
+		}
+		else
+		{
+			m_bFrameIncomplete = 1;
+		}
+	}
+	free(tempbuff);
+	tempbuff = NULL;
 	//-----------------------------------------------------------将结构体赋值----------------------------------------------------------------------
 	int exception;
-	int res2 = readFrame(str, nReceivedLen,hdlc_p, &exception);
+	int res2 = readFrame(str, 2048,hdlc_p, &exception);
 
 	switch (res2)
 	{
+	case NO_START_FLAG:
+		AfxMessageBox(_T("read frame error:开始标志错误！"), MB_OK | MB_ICONSTOP);
+		return;
+	case NO_ENDFLAG:
+		AfxMessageBox(_T("read frame error:结束标志错误！"), MB_OK | MB_ICONSTOP);
+		return;
+	case NOT_MATCH_LEN:
+		AfxMessageBox(_T("read frame error:帧长度不匹配！"), MB_OK | MB_ICONSTOP);
+		return;
 	case FTYPE_FIELD_ERROR:
 		AfxMessageBox(_T("read frame error:HDLC格式类型读取错误！"), MB_OK | MB_ICONSTOP);
 		return;
@@ -874,9 +972,6 @@ void CAboutDlg::onReceive(void)
 		return;
 	case INFO_FIELD_ERROR:
 		AfxMessageBox(_T("read frame error:信息域读取错误！"), MB_OK | MB_ICONSTOP);
-		return;
-	case NOT_MATCH_LEN:
-		AfxMessageBox(_T("read frame error:帧长度不匹配！"), MB_OK | MB_ICONSTOP);
 		return;
 	case 0:
 		break;
@@ -908,28 +1003,29 @@ void CAboutDlg::onReceive(void)
 	//组播处理
 	if ((!rcvFlag) && (GetTypes(*hdlc_p) == TYPESNRM || GetTypes(*hdlc_p) == TYPEUI))
 	{
-		
+
 		int dstlen = hdlc_p->dst_addrlen, srclen = hdlc_p->src_addrlen;
 		int dstaddr = hdlc_p->dst_addr, srcaddr = hdlc_p->src_addr;
 
 
-			for (int i = 0; i < m; i++)
-			{
+		for (int i = 0; i < m; i++)
+		{
 
-				pDlg = serverlist[i];
-				int slavlen = pDlg->stpar->slav_pot_addrlen;
-				int slavaddr = pDlg->stpar->slav_pot_addr;
-				int mainlen = pDlg->stpar->main_pot_addrlen;
-				if (vailfyBoardCastAddr(pDlg->stpar, hdlc_p))
-				{
-				switch (srclen)
+			pDlg = serverlist[i];
+			int slavlen = pDlg->stpar->slav_pot_addrlen;
+			int slavaddr = pDlg->stpar->slav_pot_addr;
+			int mainlen = pDlg->stpar->main_pot_addrlen;
+			if (vailfyBoardCastAddr(pDlg->stpar, hdlc_p))
+			{
+				switch (dstlen)
 				{
 				case 1:
 				{
-					if (slavlen == 1 && srcaddr == 0x7F)
+					if (slavlen == 1 && dstaddr == 0x7F)
 					{
 
 						pDlg->onReceive(hdlc_p);
+						rcvFlag = 1;
 					}
 					break;
 				}
@@ -937,22 +1033,25 @@ void CAboutDlg::onReceive(void)
 				{
 					if (slavaddr == 2)
 					{
-						if (gethighaddr(srcaddr, srclen) == 0x7F)
+						if (gethighaddr(dstaddr, dstlen) == 0x7F)
 						{
-							if (getlowaddr(srcaddr, srclen) == 0x7F)
+							if (getlowaddr(dstaddr, dstlen) == 0x7F)
 							{
 								pDlg->onReceive(hdlc_p);
+								rcvFlag = 1;
 							}
-							else if (getlowaddr(srcaddr, srclen) == getlowaddr(slavaddr, slavlen))
+							else if (getlowaddr(dstaddr, dstlen) == getlowaddr(slavaddr, slavlen))
 							{
 								pDlg->onReceive(hdlc_p);
+								rcvFlag = 1;
 							}
 						}
-						else if(getlowaddr(srcaddr, srclen) == 0x7F)
+						else if (getlowaddr(dstaddr, dstlen) == 0x7F)
 						{
-							if (gethighaddr(srcaddr, srclen) == gethighaddr(slavaddr, slavlen))
+							if (gethighaddr(dstaddr, dstlen) == gethighaddr(slavaddr, slavlen))
 							{
 								pDlg->onReceive(hdlc_p);
+								rcvFlag = 1;
 							}
 						}
 					}
@@ -967,10 +1066,12 @@ void CAboutDlg::onReceive(void)
 							if (getlowaddr(srcaddr, srclen) == 0x3FFF)
 							{
 								pDlg->onReceive(hdlc_p);
+								rcvFlag = 1;
 							}
 							else if (getlowaddr(srcaddr, srclen) == getlowaddr(slavaddr, slavlen))
 							{
 								pDlg->onReceive(hdlc_p);
+								rcvFlag = 1;
 							}
 						}
 						else if (getlowaddr(srcaddr, srclen) == 0x3FFF)
@@ -978,6 +1079,7 @@ void CAboutDlg::onReceive(void)
 							if (gethighaddr(srcaddr, srclen) == gethighaddr(slavaddr, slavlen))
 							{
 								pDlg->onReceive(hdlc_p);
+								rcvFlag = 1;
 							}
 						}
 					}
@@ -1127,11 +1229,195 @@ void CServerDlg::SetAddr(int addr, int addrlen)
 void CServerDlg::OnApplicationLook(UINT id)
 {
 	CWaitCursor wait;
-
 			CMFCVisualManagerOffice2007::SetStyle(CMFCVisualManagerOffice2007::Office2007_Aqua);
 
 		CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerOffice2007));
 		CDockingManager::SetDockingMode(DT_SMART);
 
 	RedrawWindow(NULL, NULL, RDW_ALLCHILDREN | RDW_INVALIDATE | RDW_UPDATENOW | RDW_FRAME | RDW_ERASE);
+}
+
+void CAboutDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	// TODO:  在此添加消息处理程序代码和/或调用默认值
+	int nTimerID = (int)nIDEvent;
+	switch (nTimerID == 2)
+	{
+	case 2:
+		KillTimer(nTimerID);
+		AfxMessageBox(_T("error:帧内超时！"), MB_OKCANCEL);
+		break;
+	default:
+		break;
+	}
+	CDialogEx::OnTimer(nIDEvent);
+}
+
+
+void CServerDlg::OnBnClickedButtonDatasnd()
+{
+	// TODO:  在此添加控件通知处理程序代码
+	/*
+	if (!stpar->DLReady)
+	{
+		AfxMessageBox(_T("warning：请先建立连接！"), MB_OKCANCEL);
+		return;
+	}
+	//开始传输帧
+	//SetTimer(IDM_TIMER_FRAME);
+	stpar->transformReady = 1;
+	pOutFrame = new hdlc[m_nWndSize];
+	for (int i = 0; i < m_nWndSize; i++)
+	{
+		hdlc *frame = &pOutFrame[i];
+		frame->dst_addr = stpar->main_pot_addr;
+		frame->dst_addrlen = stpar->main_pot_addrlen;
+		frame->src_addr = stpar->slav_pot_addr;
+		frame->src_addrlen = stpar->slav_pot_addrlen;
+		frame->end_flag = 0x7E;
+		frame->start_flag = 0x7E;
+		frame->f_format.frame_seg = (i == m_nWndSize-1) ? 0 : 1;
+		frame->f_format.frame_type = 0xA;
+		frame->pollfin = 1;
+		frame->ns = i;
+		frame->nr = 0;
+	}
+	*/
+}
+
+
+afx_msg LRESULT CServerDlg::OnAppLayerReady(WPARAM wParam, LPARAM lParam)
+{
+	u_char strType[255];
+	hdlc *outframe = new hdlc();
+	//if (fsm->fsmtype == FSMTypeIResponse && fsm->curstate == STATE_SEND_DATA)
+	//{
+	stpar->m++;
+	SendFrame("I", pOutFrame + stpar->m);
+	if (m_nextSendFrame + 1 >= m_totalFrameSend)
+	{
+		stpar->SendComplete = 1;
+	}
+	Inc(m_nextSendFrame);
+	delete outframe;
+	outframe = NULL;
+	return 0;
+}
+
+int CServerDlg::SendFrame(const char *frameKind, hdlc *outframe)
+{
+	_TCHAR  sendStr[1024];
+	u_char sendData[255];
+	convFrameHex(stpar, outframe, write_str);
+	convFrameStr(stpar, outframe, sendStr);
+	CString strToServer = sendStr;
+	writetxt((FILE*)wc, write_str, outframe->f_format.frame_sublen);
+	int nSentLen = ToPhysicLayer(strToServer);
+	if (nSentLen != SOCKET_ERROR)
+	{
+		//发送成功
+		CString outstr;
+		outstr.Format(_T("发送%03s帧"), frameKind);
+		m_liststateinfo.AddString(outstr);
+		m_liststateinfo.AddString(strToServer);
+		int iCount = m_liststateinfo.GetCount();
+		if (iCount > 0)
+			m_liststateinfo.SetCurSel(iCount - 1);
+	}
+
+	char buf[32];
+	_strtime(buf);
+	CString strErrmode;
+	//if (frame == NO_ERR)
+	strErrmode = "normal";
+	//else if (pFrame->hdr.err == CKSUM_ERR)
+	//	strErrmode = "chkerr";
+	//else
+	//	strErrmode = "lost";
+	CString strMsg;
+	strMsg.Format(_T("%s %5s %8s %7s %3d,%3d"), buf, GetTypestr(*outframe), "sent", strErrmode, outframe->ns, outframe->nr);
+	m_listLog.AddString(strMsg);
+	int iCount = m_listLog.GetCount();
+	if (iCount > 0)
+		m_listLog.SetCurSel(iCount - 1);
+	SetTimer(TM_IDLETIMEOUT, m_nIdleTimeOut, NULL);
+	return nSentLen;
+}
+
+void CServerDlg::FromAppLayer(u_char *p, u_int *infolen)
+{
+	//从应用层获取数据
+	u_int *databuf = (u_int*)p;
+	databuf[0] = m_nextSendFrame;
+	*infolen = sizeof(m_nextSendFrame);
+}
+
+int CServerDlg::ToPhysicLayer(CString strToServer)
+{
+	int nSentLen = ((CAboutDlg*)AfxGetMainWnd())->DoSend(strToServer);
+	return nSentLen;
+}
+
+afx_msg LRESULT CServerDlg::OnDatalinkReady(WPARAM wParam, LPARAM lParam)
+{
+	//********待定不知道干吗用的
+	//HdlcTcb *fsm = stpar->fsmstack;
+	//u_char strType[255];
+	//hdlc *outframe = new hdlc();
+	//if (fsm->fsmtype == FSMTypeIResponse && fsm->curstate == STATE_SEND_DATA)
+	//{
+	//	//GETHANDLER(fsm)(stpar, NULL, outframe);
+	//	GetTypeStr(outframe->type,strType);
+	//	SendFrame(strType,outframe);
+	//}
+	//delete outframe;
+	//outframe = NULL;
+	return 0;
+}
+
+
+afx_msg LRESULT CServerDlg::OnResendWnd(WPARAM wParam, LPARAM lParam)
+{
+	//重发当前窗口
+	stpar->m = 0;
+	m_nextSendFrame -= stpar->sendwindowsize;
+	PostMessage(IDM_SENDDATA);
+	return 0;
+}
+
+void CServerDlg::GenFrameBuf()
+{
+	//准备发送帧缓冲区
+	u_int segprpairs[3][2] = {
+		1, 1, //I_Fragment
+		0, 1, //I_Compelete
+		1, 0, //I_Finial
+	};
+	u_char *databuf = new u_char[2048];
+	u_int infolen;
+	u_int nextFrameSend = m_nextSendFrame;
+	for (int i = 0; i < stpar->sendwindowsize && nextFrameSend < m_totalFrameSend; i++, nextFrameSend++)
+	{
+		FromAppLayer(databuf, &infolen);
+		if (nextFrameSend == m_totalFrameSend)
+		{
+			makeI(stpar, NULL, pOutFrame + i, databuf, infolen, segprpairs[2][0], segprpairs[2][1]);
+			continue;
+		}
+		if (i == stpar->sendwindowsize)
+		{
+			makeI(stpar, NULL, pOutFrame + i, databuf, infolen, segprpairs[1][0], segprpairs[1][1]);
+			continue;
+		}
+		makeI(stpar, NULL, pOutFrame + i, databuf, infolen, segprpairs[0][0], segprpairs[0][1]);
+	}
+	delete databuf;
+	databuf = NULL;
+}
+
+
+afx_msg LRESULT CServerDlg::OnSendData(WPARAM wParam, LPARAM lParam)
+{
+	SetTimer(TM_SENDDATA, m_delaySenddata, NULL);
+	return 0;
 }

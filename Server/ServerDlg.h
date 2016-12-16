@@ -18,6 +18,13 @@
 #define WM_APPLMSG WM_USER+3
 #define WM_APPLGETDATA WM_USER+4
 
+#define IDM_DATALINKREADY WM_USER+5
+#define IDM_RESENDWND WM_USER+6
+#define IDM_SENDDATA WM_USER+12
+
+#define WM_APPLAYERREADY WM_USER+7
+
+#define MAX_SEQ 15
 class CConsoleDlg;
 
 class CAboutDlg : public CDialogEx
@@ -65,6 +72,9 @@ public:
 	afx_msg void OnDropdownButtonNewser(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnNewServer();
 	afx_msg void OnNewExit();
+	int m_bFrameIncomplete;
+	int m_nPos;
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
 };
 
 // CServerDlg 对话框
@@ -125,7 +135,7 @@ protected:
 	afx_msg LRESULT OnSendLog(WPARAM wParam, LPARAM lParam);
 public:
 	afx_msg void OnClose();
-
+	afx_msg void OnBnClickedButton1();
 //hdlc related
 	//hdlcpointer hdlc_p =  NULL;
 public:
@@ -141,23 +151,51 @@ public:
 	u_char write_str[MAX_LEN];
 	int nSentLen;
 	HdlcTcb _tcb;
-	HdlcTcb *m_fsmstack = &_tcb;
-	
+	HdlcTcb *m_fsmstack = &_tcb;	
 	HdlcStationParam _stpar;
 	HdlcStationParam *stpar = &_stpar;
-
 	DWORD curtime;
-	afx_msg void OnBnClickedButton1();
 	CAboutDlg* pParent;
 	CPropertyDlg m_propertydlg;
-	void SetAddr(int addr, int addrlen=1);
-	void OnApplicationLook(UINT id = 0);
 	CMFCPropertyGridCtrl m_propertysheet;
 	CMFCTabCtrl m_tabout;
-
 	CListBox m_listReceived;
-	CListBox m_listSent;
+	CListBox m_listLog;
 	CListBox m_liststateinfo;
 	// 从站id
 	int m_id;
+
+	hdlc m_UIFrame;
+	u_char m_UIInfoBuf[255];
+	u_int m_UIInfoLen;
+	hdlc *pOutFrame; //数据传输帧缓存
+public:
+	void SetAddr(int addr, int addrlen = 1);
+	void OnApplicationLook(UINT id = 0);
+	//void SendFrame(u_int frameKind, u_int seq);
+	int SendFrame(const char *frameKind, hdlc *outframe);
+	void FromAppLayer(u_char *p, u_int *infolen);
+	//void ToPhysicLayer(hdlc *frame);
+	int ToPhysicLayer(CString strToServer);
+	void FromPhysicLayer(hdlc *frame);
+	void ReSendFrame(int framePos);
+	void Inc(u_int& seq) { (seq < MAX_SEQ) ? seq++ : seq = 0; }
+	BOOL Between(u_int a, u_int b, u_int c)
+	{
+		//return true if a<=b<c, false otherwise
+		return ((a <= b && b < c) || (c < a && a <= b) || (b < c && c < a));
+	}
+	afx_msg void OnBnClickedButtonDatasnd();
+protected:
+	afx_msg LRESULT OnAppLayerReady(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnDatalinkReady(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnResendWnd(WPARAM wParam, LPARAM lParam);
+public:
+	void GenFrameBuf();
+private:
+	u_int m_totalFrameSend; //总过需要传输的帧数目
+	u_int m_nextSendFrame;  //下一个要传输的帧的索引
+	//u_int m_FrameInd;	//当前帧的窗口内索引 用stpar->m 代替
+protected:
+	afx_msg LRESULT OnSendData(WPARAM wParam, LPARAM lParam);
 };

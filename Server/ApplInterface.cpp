@@ -80,8 +80,8 @@ int ApplHdlcSend(HdlcStationParam *stpar, u_char *data, u_int len)
 		{
 			_TCHAR  sendStr[1024];
 			u_char sendData[255];
-			convFrameHex(stpar, &gUIFrame, write_str);
-			convFrameStr(stpar, &gUIFrame, sendStr);
+			convFrameHex(stpar, &(stpar->hWnd->m_UIFrame), write_str);
+			convFrameStr(stpar, &(stpar->hWnd->m_UIFrame), sendStr);
 			CString *m_strToServer = new CString(sendStr);
 			//writetxt((FILE*)wc, write_str, outframe.f_format.frame_sublen);
 			stpar->hWnd->SendMessage(WM_WRITETOFILE, (WPARAM)write_str, (LPARAM)outframe.f_format.frame_sublen);

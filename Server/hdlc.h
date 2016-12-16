@@ -29,9 +29,9 @@ typedef unsigned short u_short;//16λ
 extern u_char errorcode[];
 extern int glen;
 extern int gUAdatalen;
-extern hdlc gUIFrame;
-extern u_char gUIInfoBuf[];
-extern u_int gUIInfoLen;
+//extern hdlc m_UIFrame;
+//extern u_char m_UIInfoBuf[];
+//extern u_int m_UIInfoLen;
 //extern HdlcStationParam *stpar;
 
 #define MAX_LEN 2048
@@ -220,11 +220,12 @@ struct _statparam
 	unsigned int sendlen;
 	unsigned int seglen;
 	unsigned int segtail;
-	unsigned int numSegHaveSend;
+	unsigned int numSegSended;
 
 	u_char *settingdata;
 	HdlcTcb *fsmstack;
 	CServerDlg *hWnd;
+	bool SendComplete;
 };// HdlcStationParam;
 
 struct _hdlcsetting
@@ -245,4 +246,8 @@ typedef struct _hdlcparam
 	_hdlcparam *next;
 }hdlcparam;
 
-#endif
+#define TM_IDLETIMEOUT 1
+#define TM_SENDDATA 100
+#define TM_RESENDWND 101
+
+#endif bool DataTranFinish; u_int IndFrameOfWnd; int IndFrameOfWnd;

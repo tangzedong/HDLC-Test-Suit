@@ -28,7 +28,7 @@ int makeFRMR(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe, u_char *infob
 int makeUA(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe, u_char *settingdata, u_int len);
 int makeI(HdlcStationParam *stpar, hdlc *frame, hdlc *outframe, u_char *infobuf, u_int infolen, u_int seg, u_int pf, u_char rcv = 0, u_char snd = 0);
 u_int GetTypes(hdlc &frame);
-
+char *GetTypestr(hdlc &frame);
 //transfer parameters setting
 int HdlcSetOpt(HdlcStationParam *stpar, hdlcpointer frame);
 void HdlcParamInit(HdlcStationParam *stpar);

@@ -7,9 +7,7 @@
 int glen = 3;
 u_char errorcode[3] = { 0x10, 0x00, 0x20 };
 int gUAdatalen = 23;
-hdlc gUIFrame;
-u_char gUIInfoBuf[255];
-u_int gUIInfoLen;
+
 
 //HdlcStationParam *stpar;
 
@@ -443,20 +441,24 @@ int convStrHex(_TCHAR* S, u_char* pData)
 		curchar = buff.GetAt(f_val);
 		if (isdigit(curchar))
 			tmp = curchar - 48;					//读取的字符为数字
-		else if (isalpha(curchar))
+		else if (isupper(curchar))
 			tmp = curchar - 55;					//读取的字符为（大写）字母
+		else if (islower(curchar))
+			tmp = (curchar)-'a'+10;
 		pData[i] = (tmp << 4);
 		f_val++;
 		curchar = buff.GetAt(f_val);
 		//低四位
 		if (isdigit(curchar))
 			tmp = (curchar)-48;					//读取的字符为数字
-		else if (isalpha(curchar))
+		else if (isupper(curchar))
 			tmp = (curchar)-55;					//读取的字符为（大写）字母
+		else if (islower(curchar))
+			tmp = (curchar)-'a'+10;
 		pData[i] |= (u_char)tmp;
 		f_val++;
 	}
-	return 0;
+	return nReceivedLen;
 }
 
 int outHexStr(_TCHAR* S, u_char *pRawData, int index, int *bytesidx, u_char byte){
@@ -586,6 +588,44 @@ u_int GetTypes(hdlc &frame)
 	return 0xFFFFFFFF;
 }
 
+char *GetTypestr(hdlc &frame)
+{
+	char *str;
+	switch (GetTypes(frame))
+	{
+	case TYPEI:
+		str = "I";
+		break;
+	case TYPERR:
+		str = "RR";
+		break;
+	case TYPERNR:
+		str = "RNR";
+		break;
+	case TYPESNRM:
+		str = "SNRM";
+		break;
+	case TYPEDISC:
+		str = "DISC";
+		break;
+	case TYPEUA:
+		str = "UA";
+		break;
+	case TYPEDM:
+		str = "DM";
+		break;
+	case TYPEFRMR:
+		str = "FRMR";
+		break;
+	case TYPEUI:
+		str = "UI";
+		break;
+	default:
+		str = "type error";
+		break;
+	}
+	return str;
+}
 
 int HdlcSetOpt(HdlcStationParam *stpar, hdlcpointer frame){
 	return 0;
@@ -616,6 +656,8 @@ int HdlcTransParamInit(HdlcStationParam *stpar)
 
 	stpar->max_snd_info_size = 0x80;
 	stpar->sendwindowsize = 3;
+
+	stpar->SendComplete = 0;
 	return 0;
 }
 
@@ -873,55 +915,55 @@ BOOL vailfyBoardCastAddr(HdlcStationParam *stpar, hdlc *frame)
 
 	if (slavlen == 1)
 	{
-		if (srclen == 1)
+		if (dstlen == 1)
 		{
-			if (srcaddr == 0x7F)
+			if (dstaddr == 0x7F)
 			{
 				return TRUE;
 			}
 		}
-		else if (srclen == 2)
+		else if (dstlen == 2)
 		{
 
 		}
-		else if (srclen == 4)
+		else if (dstlen == 4)
 		{
 
 		}
 	}
 	else if (slavlen == 2)
 	{
-		if (srclen == 1)
+		if (dstlen == 1)
 		{
 
 		}
-		else if (srclen == 2)
+		else if (dstlen == 2)
 		{
-			if (gethighaddr(srcaddr, srclen) == 0x7F ||
-				getlowaddr(srcaddr, srclen) == 0x7F)
+			if (gethighaddr(dstaddr, srclen) == 0x7F ||
+				getlowaddr(dstaddr, srclen) == 0x7F)
 			{
 				return TRUE;
 			}
 		}
-		else if (srclen == 4)
+		else if (dstlen == 4)
 		{
 
 		}
 	}
 	else if (slavlen == 4)
 	{
-		if (srclen == 1)
+		if (dstlen == 1)
 		{
 
 		}
-		else if (srclen == 2)
+		else if (dstlen == 2)
 		{
 
 		}
-		else if (srclen == 4)
+		else if (dstlen == 4)
 		{
-			if (gethighaddr(srcaddr, srclen) == 0x3FFF ||
-				getlowaddr(srcaddr, srclen) == 0x3FFF)
+			if (gethighaddr(dstaddr, srclen) == 0x3FFF ||
+				getlowaddr(dstaddr, srclen) == 0x3FFF)
 			{
 				return TRUE;
 			}
