@@ -51,7 +51,7 @@ void CServerSocket::OnReceive(int nErrorCode)  //客户端调用一次send函数会触发OnR
 }
 
 
-void CServerSocket::setParentDlg(CAboutDlg* pDlg)
+void CServerSocket::setParentDlg(CMainDlg* pDlg)
 {
 	m_pDlg=pDlg;  //关联两个类
 }

@@ -249,5 +249,7 @@ typedef struct _hdlcparam
 #define TM_IDLETIMEOUT 1
 #define TM_SENDDATA 100
 #define TM_RESENDWND 101
+#define TM_INTERFRAME_TIMEOUT 102
+#define TM_SERVEREVENT 103
 
 #endif bool DataTranFinish; u_int IndFrameOfWnd; int IndFrameOfWnd;

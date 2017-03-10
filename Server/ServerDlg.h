@@ -10,6 +10,8 @@
 #include "hdlceventhandler.h"
 #include "ConsoleDlg.h"
 #include "PropertyDlg.h"
+#include "IPhysic.h"
+#include "afxcmn.h"
 #define WM_INFO WM_USER+8
 #define WM_REPORTEVENT WM_USER+9
 #define WM_WRITETOFILE WM_USER+10
@@ -25,15 +27,22 @@
 #define WM_APPLAYERREADY WM_USER+7
 
 #define MAX_SEQ 15
+
+typedef void(*QueryModuleFun)(__out LPTSTR szDescription, __in   int nMaxCount);
+
 class CConsoleDlg;
 
-class CAboutDlg : public CDialogEx
+class CMainDlg : public CDialogEx, public ISend
 {
 public:
-	CAboutDlg();
+	CMainDlg();
 
 	// 对话框数据
 	enum { IDD = IDD_ABOUTBOX };
+
+protected:
+	PROCESS_INFORMATION m_procinfo;
+	HMODULE m_hMod = NULL;
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
@@ -55,30 +64,60 @@ public:
 
 	CServerDlg *serverlist[25];
 	u_int m = 0;
-	afx_msg void OnClose();
-	// //接受处理函数
-	void onReceive();
-	virtual BOOL OnInitDialog();
+
+
+
 	CString m_strServerName;
 	int m_nServerPort;
+
+	u_char str[2048];
+
+
+	u_char m_bListening = 0;
+	
+	CConsoleDlg m_condlg;
+
+	int m_bFrameIncomplete;
+	int m_nPos;
+
+	// 发送帧延时
+	UINT m_delaySendData;
+	// 信道空闲超时（调试时失效）
+	UINT m_nIdleTimeout;
+	// 重发超时
+	int m_nResendTimeOut;
+
+	UINT m_nInterTimeout;
+	CSpinButtonCtrl m_SpinPort;
+
+public:
+	// //接受处理函数
+	int DoSend(CString szData);
+	void onReceive();
+	virtual BOOL OnInitDialog();
 	void onAccept();
 	void onClose();
-	u_char str[2048];
+
+	afx_msg void OnClose();
 	afx_msg void OnClickedButtonCn();
-	int DoSend(CString nSentLen);
-	u_char m_bListening = 0;
 	afx_msg void OnViewConsole();
-	CConsoleDlg m_condlg;
 	afx_msg void OnDropdownButtonNewser(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnNewServer();
 	afx_msg void OnNewExit();
-	int m_bFrameIncomplete;
-	int m_nPos;
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	afx_msg void OnChangeEdit1();
+	afx_msg void OnChangeEdit4();
+	afx_msg void OnChangeEdit5();
+	afx_msg void OnChangeEdit6();
+	afx_msg void OnDeltaposSpin1(NMHDR *pNMHDR, LRESULT *pResult);
+	afx_msg void OnNewClient();
+	afx_msg void OnPluginLoadModule();
+	afx_msg void OnPluginViewModuleInf();
+	afx_msg void OnMacroEditMacro();
 };
 
 // CServerDlg 对话框
-class CServerDlg : public CDialogEx
+class CServerDlg : public CDialogEx, public IGenFrame
 {
 // 构造
 public:
@@ -115,7 +154,7 @@ public:
 	void onClose(void);  //对应处理OnClose()事件的函数
 	void onAccept(void);
 	void onReceive(hdlc*);
-
+	void DoClear();
 
 
 //	void setHScroll();
@@ -144,7 +183,7 @@ public:
 	//初始时置1状态为NDM，2为WAIT_CONNECT , 3为NRM , 4为WAIT_DISCONNECT
 	u_char str[MAX_LEN];
 	u_char* str_pointer;
-	FILE *wc;
+	FILE *wc=NULL;
 	u_int tmp;
 	u_char* str_p;
 	u_int m; //记录信息分帧存储的变量
@@ -155,7 +194,7 @@ public:
 	HdlcStationParam _stpar;
 	HdlcStationParam *stpar = &_stpar;
 	DWORD curtime;
-	CAboutDlg* pParent;
+	CMainDlg* pParent;
 	CPropertyDlg m_propertydlg;
 	CMFCPropertyGridCtrl m_propertysheet;
 	CMFCTabCtrl m_tabout;
@@ -166,20 +205,23 @@ public:
 	int m_id;
 
 	hdlc m_UIFrame;
-	u_char m_UIInfoBuf[255];
+	char m_UIInfoBuf[255];
 	u_int m_UIInfoLen;
 	hdlc *pOutFrame; //数据传输帧缓存
+
+	//关闭指令是否下达
+	BOOL close = FALSE;
 public:
 	void SetAddr(int addr, int addrlen = 1);
 	void OnApplicationLook(UINT id = 0);
 	//void SendFrame(u_int frameKind, u_int seq);
 	int SendFrame(const char *frameKind, hdlc *outframe);
-	void FromAppLayer(u_char *p, u_int *infolen);
+	void FromAppLayer(u_char *p, u_int *infolen, u_int nextSendFrame);
 	//void ToPhysicLayer(hdlc *frame);
 	int ToPhysicLayer(CString strToServer);
 	void FromPhysicLayer(hdlc *frame);
 	void ReSendFrame(int framePos);
-	void Inc(u_int& seq) { (seq < MAX_SEQ) ? seq++ : seq = 0; }
+	void Inc(u_int& seq) { (seq < m_totalFrameSend) ? seq++ : seq = 0; }
 	BOOL Between(u_int a, u_int b, u_int c)
 	{
 		//return true if a<=b<c, false otherwise

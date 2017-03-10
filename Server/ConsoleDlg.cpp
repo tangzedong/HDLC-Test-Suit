@@ -81,7 +81,7 @@ void CConsoleDlg::OnDblclkConsole()
 	int sel = m_listconsole.GetCurSel();
 	if (sel >= 0)
 	{
-		CAboutDlg *pSer = ((CAboutDlg*)AfxGetMainWnd());
+		CMainDlg *pSer = ((CMainDlg*)AfxGetMainWnd());
 		if (pSer->serverlist[sel])
 			pSer->serverlist[sel]->ShowWindow(pSer->serverlist[sel]->IsWindowVisible() ? SW_HIDE : SW_SHOW);
 	}

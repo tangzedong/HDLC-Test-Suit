@@ -28,6 +28,7 @@ public:
 
 	DECLARE_MESSAGE_MAP()
 	void DoSend();
+	virtual int ExitInstance();
 };
 
 extern CServerApp theApp;

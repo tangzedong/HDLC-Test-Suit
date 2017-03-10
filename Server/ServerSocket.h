@@ -2,7 +2,7 @@
 #include <afxsock.h>
 
 // CServerSocket 命令目标
-class CAboutDlg;
+class CMainDlg;
 class CServerSocket : public CAsyncSocket
 {
 public:
@@ -12,9 +12,9 @@ public:
 	virtual void OnAccept(int nErrorCode);
 	virtual void OnReceive(int nErrorCode);
 private:
-	CAboutDlg* m_pDlg;   
+	CMainDlg* m_pDlg;   
 public:
-	void setParentDlg(CAboutDlg* pDlg);  //用于关联两个类
+	void setParentDlg(CMainDlg* pDlg);  //用于关联两个类
 };
 
 

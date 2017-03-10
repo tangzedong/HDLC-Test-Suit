@@ -5,7 +5,8 @@
 #include "stdafx.h"
 #include "Server.h"
 #include "ServerDlg.h"
-
+#include "SkinH.h"
+#pragma comment(lib, "SkinH.lib")
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -73,8 +74,9 @@ BOOL CServerApp::InitInstance()
 	// 例如修改为公司或组织名
 	SetRegistryKey(_T("应用程序向导生成的本地应用程序"));
 
-	CAboutDlg dlg;
+	CMainDlg dlg;
 	m_pMainWnd = &dlg;
+	SkinH_AttachEx("skins/Aero.she", NULL);
 	INT_PTR nResponse = dlg.DoModal();
 	if (nResponse == IDOK)
 	{
@@ -107,4 +109,12 @@ BOOL CServerApp::InitInstance()
 void CServerApp::DoSend()
 {
 
+}
+
+
+int CServerApp::ExitInstance()
+{
+	// TODO:  在此添加专用代码和/或调用基类
+	SkinH_Detach();
+	return CWinApp::ExitInstance();
 }

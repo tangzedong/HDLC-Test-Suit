@@ -81,6 +81,7 @@ DEFHANDLER(hdlcStateNDM)
 		//	{
 		//		makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
 		//		stpar->canUISend = 1;
+		//		stpar->isUIWaiting = 0;
 		//	}
 		//	if (frame->infolen > 0)
 		//	{
@@ -254,7 +255,7 @@ DEFHANDLER(hdlcStateNRMIdle)
 			{
 				
 				stpar->canUISend = 1;
-				makeUI(stpar, frame, &(stpar->hWnd->m_UIFrame), stpar->hWnd->m_UIInfoBuf, stpar->hWnd->m_UIInfoLen);
+				makeUI(stpar, frame, &(stpar->hWnd->m_UIFrame), (u_char*)(stpar->hWnd->m_UIInfoBuf), stpar->hWnd->m_UIInfoLen);
 			}
 			//DOHANDLER(NRM, RR)(&stpar, hdlc_p, &outframe);
 			//通过send()函数发送响应
@@ -349,45 +350,15 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 			//todo确认前一个窗口，开始传送下一个窗口
 			stpar->m += stpar->sendwindowsize;
 		}
-		//else if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 && stpar->windowsize == 1)//保证是完整的一帧  FRAME_type 为I_COMPLETE，整个帧F=1, S=0
-		//{
-		//	if (stpar->isUIWaiting)//UI发送时机1 I_COMPLETE 发送之前
-		//	{
-		//		makeUI(stpar, frame, &gUIFrame, gUIInfoBuf, gUIInfoLen);
-		//		stpar->canUISend = 1;
-		//	}
-		//	//makeRR(stpar, frame, outframe, stpar->rcv_num, stpar->frame_p_f);
-		//	for (u_int n = 0; n < frame->infolen; n++)
-		//	{
-		//		stpar->save_inf[stpar->m] = frame->info_buff[n];
-		//		stpar->m++;
-		//	}
-
-
-		//	u_char s_rcv = frame->ns + 1;
-		//	u_char s_send = frame->nr;
-		//	stpar->rcv_num++;
-		//	stpar->rcv_num = stpar->rcv_num % 8;
-		//	//	u_char data[] = { 0xE6, 0xE7, 0x00, 0x61, 0x1F, 0xA1, 0x09, 0x06, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08,
-		//	//	0x01, 0x01, 0xA2, 0x03, 0x02, 0x01, 0x01, 0xA3, 0x05, 0xA1, 0x03, 0x02, 0x01, 0x0D, 0xBE,
-		//	//	0x06, 0x04, 0x04, 0x0E, 0x01, 0x06, 0x01};
-		//	//makeI(stpar, frame, outframe, data, sizeof(data)/sizeof(u_char), 0, 1, s_rcv, s_send);
-
-		//	ApplSend(stpar->save_inf, stpar->m);
-		//	stpar->m = 0;
-
-		//	fsmstack->curstate = STATE_WAIT_RES;
-		//	stpar->isTransFinish = 0;
-		//	stpar->isSendData = 1;
-		//}
 		//分段的最后一帧，由m控制F=1, S=0, FRAME_type 为I_COMPLETE, I_FINISH&& stpar->windowsize > 1
 		//main to slave端接收数据
 		else if (frame->f_format.frame_seg == 0 && frame->pollfin == 1 )
 		{
 			if (stpar->isUIWaiting)//UI发送时机2 每段最后一帧发送之前
 			{
-				makeUI(stpar, frame, &(stpar->hWnd->m_UIFrame), stpar->hWnd->m_UIInfoBuf, stpar->hWnd->m_UIInfoLen);
+				makeUI(stpar, frame, &(stpar->hWnd->m_UIFrame), (u_char*)stpar->hWnd->m_UIInfoBuf, stpar->hWnd->m_UIInfoLen);
 				stpar->canUISend = 1;
+				stpar->isUIWaiting = 0;
 			}
 			//for(u_int n = 0;n < (m + 1);n++)//上报，获得需要返回的信息域
 			// {
@@ -403,11 +374,6 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 			u_char s_send = frame->nr;
 			stpar->rcv_num++;
 			stpar->rcv_num = stpar->rcv_num % 8;
-			//	u_char data[] = { 0xE6, 0xE7, 0x00, 0x61, 0x1F, 0xA1, 0x09, 0x06, 0x07, 0x60, 0x85, 0x74, 0x05, 0x08,
-			//	0x01, 0x01, 0xA2, 0x03, 0x02, 0x01, 0x01, 0xA3, 0x05, 0xA1, 0x03, 0x02, 0x01, 0x0D, 0xBE,
-			//	0x06, 0x04, 0x04, 0x0E, 0x01, 0x06, 0x01};
-			//makeI(stpar, frame, outframe, data, sizeof(data)/sizeof(u_char), 0, 1, s_rcv, s_send);
-			
 			stpar->m = 0;
 
 			stpar->fsmstack->curstate = STATE_WAIT_RES;
@@ -447,24 +413,6 @@ DEFHANDLER(hdlcStateIRWaitCmd)
 
 DEFHANDLER(hdlcStateIRWaitRes) //等待主站确认当前发送的窗口
 {
-	//HdlcTcb *fsmstack = stpar->fsmstack;
-	//u_int len;
-	//u_char *buf;
-	//u_int nwin, tail;
-	///*if (ApplGetBuf(&buf, &len) != READY)
-	//{
-	//	return 0;
-	//}*/
-	//buf = stpar->sendbuf;
-	//len = stpar->sendlen;
-	////stpar->hWnd->FromAppLayer(buf);
-	//stpar->seglen = nwin = len / stpar->max_rcv_info_size;
-	//stpar->segtail = len % stpar->max_rcv_info_size;
-	//if (stpar->segtail != 0)
-	//{
-	//	stpar->seglen = stpar->seglen + 1;
-	//}
-	
 	if (GetTypes(*frame) == TYPERR)
 	{	
 		//todo确认前一个窗口，开始传送下一个窗口
@@ -504,58 +452,12 @@ DEFHANDLER(hdlcStateIRSendData)
 	//todoGet data from app layer
 	//准备帧缓冲区
 	stpar->hWnd->GenFrameBuf();
-	/*以下过程由SeverDlg::GenFrameBuf处理*/
-	//while (m < stpar->sendlen && j < stpar->max_rcv_info_size)
-	//{
-	//	data[j++] = send_buf[m++];
-	//}
-	////stpar->hWnd->FromAppLayer（buf);
-	////todo填充输出帧缓存pOutFrame
-	////结束帧处理
-	//if (m == stpar->sendlen)
-	//{
-	//	seg = 0; pf = 1;
-	//}
-	//else if (m < stpar->sendlen &&  numSegSended != stpar->rcvwindowsize - 1)
-	//{
-	//	seg = 1; pf = 0;
-	//}
-	//else if (m < stpar->sendlen && numSegSended == stpar->rcvwindowsize - 1)
-	//{
-	//	seg = 1; pf = 1;
-	//}
 	//打开发送帧定时器
 	stpar->hWnd->PostMessage(IDM_SENDDATA);
-	/*以下发送过程已由定时器触发函数处理*/
-	//stpar->send_num++;
-	//stpar->send_num = stpar->send_num % 8;
-	//makeI(stpar, NULL, outframe, data, j, seg, pf, stpar->rcv_num, stpar->send_num);
-	//stpar->send_flag = 1;
-	//numSegSended++; //已传送的帧
-	//stpar->numSegSended = numSegSended;
-	//stpar->m = m;
-	//} while (numSegHaveSend % windowsize != 0 && numSegHaveSend < stpar->seglen);
-	//if (numSegSended % windowsize == 0 && numSegSended < stpar->seglen) //等待主站确认
-	//{
-	//	fsmstack->curstate = STATE_WAIT_CMD;
-	//	//todo打开重传计时器
-	//	/*代码转移发送完后打开*/
-	//	//stpar->hWnd->SetTimer(TM_RESENDWND, 2000, NULL);
-	//}
-	/*删除代码，在WAIT_CMD状态确认传输完成，返回NRM*/
-	//else if (m == stpar->sendlen) //传输完毕返回NRM，等待主站命令
-	//{
-	//	stpar->fsmstack = FSMenter(stpar->fsmstack, FSMTypeNRM);
-	//	fsmstack->curstate = STATE_NRM_IDLE;
-	//}
-	//else
-	//{
-	//	stpar->isTransFinish = 0;
-	//}
-	//todo暂时结束,等待计时器，用来控制流量， 或超时重传
 
+	//todo暂时结束,等待计时器，用来控制流量， 或超时重传
 	fsmstack->curstate =  STATE_WAIT_RES;
-	stpar->isTransFinish = 0;
+	stpar->isTransFinish = 1;
 	stpar->isSendData = 0;
 	return 0;
 }
